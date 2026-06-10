@@ -1,0 +1,21 @@
+# speckit
+CONSTITUTION.md
+SPECIFICATION.md
+PLAN.md
+tasks.md
+.specify/
+.tmp
+.github/
+
+# Arduino build artifacts
+build/
+*.elf
+*.bin
+*.hex
+*.map
+
+# VS Code
+.vscode/
+
+# macOS
+.DS_Store
