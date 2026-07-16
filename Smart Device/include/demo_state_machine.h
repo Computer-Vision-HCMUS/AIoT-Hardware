@@ -1,9 +1,8 @@
 /**
  * @file demo_state_machine.h
- * @brief State machine for hardware demo navigation and screen transitions
- * 
- * Manages demo flow with state transitions between different display screens.
- * Clean state transitions for edge case handling and maintainability.
+ * @brief State machine for EmotiCare UI navigation (spec 005)
+ *
+ * Maps DemoState values to ScreenId equivalents used by demo_app.cpp.
  */
 
 #ifndef DEMO_STATE_MACHINE_H
@@ -13,79 +12,40 @@
 
 /**
  * @enum DemoState
- * @brief States for the hardware demo
+ * @brief States matching the 8 screens defined in spec 005
  */
 enum class DemoState : uint8_t {
-    WELCOME,        ///< Welcome screen with device name and status
-    DEVICE_INFO,    ///< Device information screen (MAC, version, etc)
-    ERROR_STATE     ///< Error or fault state
+    HOME           = 0,  ///< Landing menu screen
+    CHECK_IN       = 1,  ///< Emotion detection checkpoint
+    SUPPORT        = 2,  ///< Emotion-based activity recommendation
+    DISCOVER       = 3,  ///< Content selection hub (Music / Podcast)
+    MUSIC_LIST     = 4,  ///< Scrollable music recommendations
+    PODCAST_LIST   = 5,  ///< Scrollable podcast recommendations
+    COMPANION_CHAT = 6,  ///< Voice conversation interface (UI simulation)
+    INSIGHTS       = 7,  ///< Emotion statistics by time period
+    ERROR_STATE    = 8   ///< Fault / error fallback
 };
 
 /**
  * @class DemoStateMachine
- * @brief Manages navigation between demo screens
- * 
- * Handles state transitions and provides methods to query current state.
- * Demo cycles: WELCOME → DEVICE_INFO → WELCOME (repeating)
+ * @brief Lightweight wrapper for current DemoState with transition helpers
  */
 class DemoStateMachine {
 public:
-    /**
-     * @brief Construct a new DemoStateMachine instance
-     */
     DemoStateMachine();
 
-    /**
-     * @brief Initialize the state machine
-     * @return true if initialization successful
-     */
     bool init();
 
-    /**
-     * @brief Get the current demo state
-     * @return Current DemoState
-     */
     DemoState getCurrentState() const;
-
-    /**
-     * @brief Transition to the next state in the demo sequence
-     * Cycles: WELCOME → DEVICE_INFO → WELCOME
-     */
-    void transitionNext();
-
-    /**
-     * @brief Transition to a specific state
-     * @param new_state Target state
-     */
     void transitionTo(DemoState new_state);
-
-    /**
-     * @brief Reset to initial state (WELCOME)
-     */
     void reset();
 
-    /**
-     * @brief Get string description of current state
-     * @return State name as string (for logging/display)
-     */
     const char* getStateName() const;
-
-    /**
-     * @brief Check if state machine is ready
-     * @return true if initialized
-     */
     bool isReady() const;
 
 private:
-    bool initialized_;
+    bool      initialized_;
     DemoState current_state_;
-
-    /**
-     * @brief Get the next state in sequence
-     * @param current Current state
-     * @return Next state in cycle
-     */
-    DemoState getNextState(DemoState current);
 };
 
-#endif // DEMO_STATE_MACHINE_H
+#endif  // DEMO_STATE_MACHINE_H

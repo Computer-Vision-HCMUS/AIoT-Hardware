@@ -15,6 +15,12 @@ static ButtonManager* g_button_manager = nullptr;
 // ISR flag for button events
 static volatile bool button_event = false;
 
+namespace {
+constexpr uint8_t kButtonCount = 5;
+constexpr uint32_t kDebounceWindowMs = DEBOUNCE_TIME_MS;
+constexpr uint32_t kDebounceSamples = DEBOUNCE_SAMPLES;
+}
+
 // ============================================================================
 // GPIO ISR Callback
 // ============================================================================
@@ -29,17 +35,16 @@ static void IRAM_ATTR button_isr_handler(void* arg) {
 
 ButtonManager::ButtonManager()
     : initialized_(false) {
-    // Initialize button states
-    for (int i = 0; i < 2; i++) {
-        button_states_[i].button_id = (i == 0) ? ButtonID::BUTTON_A : ButtonID::BUTTON_B;
+    for (uint8_t i = 0; i < kButtonCount; ++i) {
+        button_states_[i].button_id = static_cast<ButtonID>(i);
         button_states_[i].press_count = 0;
         button_states_[i].last_press_time_ms = 0;
         button_states_[i].currently_pressed = false;
         previous_pressed_[i] = false;
         debounce_counters_[i] = 0;
+        just_pressed_[i] = false;
     }
-    
-    // Store global reference for ISR
+
     g_button_manager = this;
 }
 
@@ -51,27 +56,28 @@ bool ButtonManager::init() {
     try {
         Serial.println("[Button] Initializing button manager...");
         
-        // Configure GPIO for buttons as input with pull-up
         gpio_config_t io_conf = {};
-        
-        // Button A and B pins
-        io_conf.pin_bit_mask = (1ULL << BUTTON_A_PIN) | (1ULL << BUTTON_B_PIN);
+        uint64_t pin_mask = (1ULL << BUTTON_A_PIN) | (1ULL << BUTTON_B_PIN) | (1ULL << START_PIN) |
+                            (1ULL << NEXT_PIN) | (1ULL << BACK_PIN);
+        io_conf.pin_bit_mask = pin_mask;
         io_conf.mode = GPIO_MODE_INPUT;
         io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
         io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-        io_conf.intr_type = GPIO_INTR_NEGEDGE;  // Trigger on falling edge (active low)
+        io_conf.intr_type = BUTTON_INTR_TYPE;  // Trigger configured in pins_config.h
 
         // Apply GPIO configuration
         gpio_config(&io_conf);
-        Serial.printf("[Button] GPIO configured: A=%d, B=%d\n", BUTTON_A_PIN, BUTTON_B_PIN);
+        Serial.printf("[Button] GPIO configured: MODE=%d ACTION=%d START=%d NEXT=%d BACK=%d\n",
+                      MODE_PIN, ACTION_PIN, START_PIN, NEXT_PIN, BACK_PIN);
 
-        // Install GPIO ISR service
         gpio_install_isr_service(0);
         Serial.println("[Button] ISR service installed");
-        
-        // Add ISR handlers for both buttons
+
         gpio_isr_handler_add((gpio_num_t)BUTTON_A_PIN, button_isr_handler, nullptr);
         gpio_isr_handler_add((gpio_num_t)BUTTON_B_PIN, button_isr_handler, nullptr);
+        gpio_isr_handler_add((gpio_num_t)START_PIN, button_isr_handler, nullptr);
+        gpio_isr_handler_add((gpio_num_t)NEXT_PIN, button_isr_handler, nullptr);
+        gpio_isr_handler_add((gpio_num_t)BACK_PIN, button_isr_handler, nullptr);
         Serial.println("[Button] ISR handlers registered");
 
         initialized_ = true;
@@ -85,30 +91,46 @@ bool ButtonManager::init() {
 }
 
 ButtonState ButtonManager::getButtonState(ButtonID button_id) {
-    int idx = (button_id == ButtonID::BUTTON_A) ? 0 : 1;
+    uint8_t idx = static_cast<uint8_t>(button_id);
+    if (idx >= ButtonManager::BUTTON_COUNT) {
+        idx = 0;
+    }
     return button_states_[idx];
 }
 
 void ButtonManager::resetPressCount(ButtonID button_id) {
-    int idx = (button_id == ButtonID::BUTTON_A) ? 0 : 1;
+    uint8_t idx = static_cast<uint8_t>(button_id);
+    if (idx >= ButtonManager::BUTTON_COUNT) {
+        return;
+    }
     button_states_[idx].press_count = 0;
 }
 
 void ButtonManager::resetAll() {
-    for (int i = 0; i < 2; i++) {
+    for (uint8_t i = 0; i < BUTTON_COUNT; ++i) {
         button_states_[i].press_count = 0;
         button_states_[i].last_press_time_ms = 0;
         button_states_[i].currently_pressed = false;
+        debounce_counters_[i] = 0;
+        previous_pressed_[i] = false;
+        just_pressed_[i] = false;
     }
+    button_event = false;
 }
 
 bool ButtonManager::wasPressed(ButtonID button_id) {
-    int idx = (button_id == ButtonID::BUTTON_A) ? 0 : 1;
+    uint8_t idx = static_cast<uint8_t>(button_id);
+    if (idx >= BUTTON_COUNT) {
+        return false;
+    }
     return just_pressed_[idx];
 }
 
 bool ButtonManager::isPressed(ButtonID button_id) {
-    int idx = (button_id == ButtonID::BUTTON_A) ? 0 : 1;
+    uint8_t idx = static_cast<uint8_t>(button_id);
+    if (idx >= BUTTON_COUNT) {
+        return false;
+    }
     return button_states_[idx].currently_pressed;
 }
 
@@ -117,17 +139,12 @@ void ButtonManager::update() {
         return;
     }
 
-    bool prev_a = button_states_[0].currently_pressed;
-    bool prev_b = button_states_[1].currently_pressed;
+    for (uint8_t i = 0; i < ButtonManager::BUTTON_COUNT; ++i) {
+        bool prev_state = button_states_[i].currently_pressed;
+        debounceButton(i);
+        just_pressed_[i] = (!prev_state && button_states_[i].currently_pressed);
+    }
 
-    // Update debounce for each button
-    debounceButton(0);  // Button A
-    debounceButton(1);  // Button B
-
-    just_pressed_[0] = (!prev_a && button_states_[0].currently_pressed);
-    just_pressed_[1] = (!prev_b && button_states_[1].currently_pressed);
-    
-    // Clear ISR flag after processing
     button_event = false;
 }
 
@@ -140,18 +157,15 @@ void ButtonManager::setupGPIOInterrupts() {
 }
 
 void ButtonManager::debounceButton(uint8_t button_idx) {
-    if (button_idx >= 2) return;
+    if (button_idx >= ButtonManager::BUTTON_COUNT) {
+        return;
+    }
 
-    // Read current GPIO state
     bool gpio_pressed = readButtonGPIO(button_idx);
-
-    // Debounce logic: require stable samples
     if (gpio_pressed) {
         debounce_counters_[button_idx]++;
-        if (debounce_counters_[button_idx] >= DEBOUNCE_SAMPLES) {
-            // Stable pressed state confirmed
+        if (debounce_counters_[button_idx] >= kDebounceSamples) {
             if (!button_states_[button_idx].currently_pressed) {
-                // Transition from not-pressed to pressed - increment counter
                 button_states_[button_idx].press_count++;
                 button_states_[button_idx].last_press_time_ms = esp_timer_get_time() / 1000;
             }
@@ -164,9 +178,30 @@ void ButtonManager::debounceButton(uint8_t button_idx) {
 }
 
 bool ButtonManager::readButtonGPIO(uint8_t button_idx) {
-    gpio_num_t pin = (button_idx == 0) ? (gpio_num_t)BUTTON_A_PIN : (gpio_num_t)BUTTON_B_PIN;
+    gpio_num_t pin = GPIO_NUM_NC;
+    switch (button_idx) {
+        case 0:
+            pin = (gpio_num_t)BUTTON_A_PIN;
+            break;
+        case 1:
+            pin = (gpio_num_t)BUTTON_B_PIN;
+            break;
+        case 2:
+            pin = (gpio_num_t)START_PIN;
+            break;
+        case 3:
+            pin = (gpio_num_t)NEXT_PIN;
+            break;
+        case 4:
+            pin = (gpio_num_t)BACK_PIN;
+            break;
+        default:
+            pin = (gpio_num_t)BUTTON_A_PIN;
+            break;
+    }
+
     int level = gpio_get_level(pin);
-    
+
     // Buttons are active-low (pressed = 0)
     return (level == 0);
 }

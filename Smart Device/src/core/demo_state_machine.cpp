@@ -1,25 +1,17 @@
 /**
  * @file demo_state_machine.cpp
- * @brief Demo state machine implementation
+ * @brief Demo state machine implementation (spec 005)
  */
 
 #include "demo_state_machine.h"
 
-// ============================================================================
-// DemoStateMachine Implementation
-// ============================================================================
-
 DemoStateMachine::DemoStateMachine()
-    : initialized_(false),
-      current_state_(DemoState::WELCOME) {}
+    : initialized_(false), current_state_(DemoState::HOME) {}
 
 bool DemoStateMachine::init() {
-    if (initialized_) {
-        return true;
-    }
-
-    current_state_ = DemoState::WELCOME;
-    initialized_ = true;
+    if (initialized_) return true;
+    current_state_ = DemoState::HOME;
+    initialized_   = true;
     return true;
 }
 
@@ -27,44 +19,29 @@ DemoState DemoStateMachine::getCurrentState() const {
     return current_state_;
 }
 
-void DemoStateMachine::transitionNext() {
-    current_state_ = getNextState(current_state_);
-}
-
 void DemoStateMachine::transitionTo(DemoState new_state) {
     current_state_ = new_state;
 }
 
 void DemoStateMachine::reset() {
-    current_state_ = DemoState::WELCOME;
+    current_state_ = DemoState::HOME;
 }
 
 const char* DemoStateMachine::getStateName() const {
     switch (current_state_) {
-        case DemoState::WELCOME:
-            return "WELCOME";
-        case DemoState::DEVICE_INFO:
-            return "DEVICE_INFO";
-        case DemoState::ERROR_STATE:
-            return "ERROR";
-        default:
-            return "UNKNOWN";
+        case DemoState::HOME:           return "HOME";
+        case DemoState::CHECK_IN:       return "CHECK_IN";
+        case DemoState::SUPPORT:        return "SUPPORT";
+        case DemoState::DISCOVER:       return "DISCOVER";
+        case DemoState::MUSIC_LIST:     return "MUSIC_LIST";
+        case DemoState::PODCAST_LIST:   return "PODCAST_LIST";
+        case DemoState::COMPANION_CHAT: return "COMPANION_CHAT";
+        case DemoState::INSIGHTS:       return "INSIGHTS";
+        case DemoState::ERROR_STATE:    return "ERROR";
+        default:                        return "UNKNOWN";
     }
 }
 
 bool DemoStateMachine::isReady() const {
     return initialized_;
-}
-
-DemoState DemoStateMachine::getNextState(DemoState current) {
-    switch (current) {
-        case DemoState::WELCOME:
-            return DemoState::DEVICE_INFO;
-        case DemoState::DEVICE_INFO:
-            return DemoState::WELCOME;
-        case DemoState::ERROR_STATE:
-            return DemoState::WELCOME;  // Return to welcome after error
-        default:
-            return DemoState::WELCOME;
-    }
 }

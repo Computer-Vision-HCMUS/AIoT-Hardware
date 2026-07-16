@@ -49,9 +49,6 @@ bool DisplayController::init() {
         delay(100);
         tft.fillScreen(TFT_BLACK);  
         delay(100);
-        tft.writecommand(0x36);   // MADCTL
-        tft.writedata(0x00);
-        tft.setAddrWindow(0, 80, 240, 320);
         Serial.printf("[Display] Rotation set to %d\n", DISPLAY_ROTATION);
         delay(100);
         

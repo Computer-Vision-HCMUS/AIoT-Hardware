@@ -1,0 +1,117 @@
+/**
+ * @file discover_screen.cpp
+ * @brief DISCOVER screen renderer — Music / Podcast selection hub
+ *
+ * Shows emotion-aware context: "Good for: [emotion]" or "Good for: Neutral (default)"
+ * if no check-in has been done yet.
+ *
+ * Button legend:
+ *   S1(MODE)   = --
+ *   S2(ACTION) = OK
+ *   S3(START)  = OK
+ *   S4(NEXT)   = DOWN
+ *   S5(BACK)   = UP/BCK
+ */
+
+#include "screens/discover_screen.h"
+#include "ui_common.h"
+#include <cstdio>
+
+namespace ScreenHandlers {
+
+void drawDiscoverScreen(DisplayController& display, const AppState& state) {
+    if (!display.isReady()) return;
+
+    display.setBackgroundColor(10, 15, 25);
+    display.clear();
+
+    // ---- Title ----
+    display.setColor(255, 255, 255);
+    display.drawText(6, 6, "Discover", 2);
+
+    UICommon::drawDivider(display, 28);
+
+    // ---- Emotion context line ----
+    const bool hasEmotion = !state.sharedContext.lastEmotion.empty() &&
+                            state.sharedContext.lastEmotion != "Neutral";
+
+    if (hasEmotion) {
+        // Detected emotion — personalised line
+        char buf[48];
+        snprintf(buf, sizeof(buf), "Good for: %s (%u%%)",
+                 state.sharedContext.lastEmotion.c_str(),
+                 state.sharedContext.confidence);
+        display.setColor(255, 200, 60);
+        display.drawText(6, 33, buf, 1);
+
+        display.setColor(100, 170, 240);
+        display.drawText(6, 45, "AI picks tuned to your mood", 1);
+    } else {
+        // No check-in yet — default neutral line
+        display.setColor(130, 150, 175);
+        display.drawText(6, 33, "Good for: Neutral (default)", 1);
+
+        display.setColor(80, 100, 125);
+        display.drawText(6, 45, "Do Check-In for mood-based picks", 1);
+    }
+
+    UICommon::drawDivider(display, 58);
+
+    // ---- Menu: Music / Podcast ----
+    static const char* kItems[]    = { "Music", "Podcast" };
+    static const char* kSubDesc[]  = {
+        "8 AI-curated tracks",
+        "6 mindful episodes"
+    };
+    constexpr uint8_t kCount = 2;
+
+    const uint16_t startY = 63;
+    const uint16_t itemH  = 48;
+    const uint16_t W      = display.getWidth();
+
+    for (uint8_t i = 0; i < kCount; ++i) {
+        uint16_t y        = startY + i * itemH;
+        bool     selected = (i == state.discoverIndex);
+
+        if (selected) {
+            display.setColor(28, 58, 112);
+            display.drawRectangle(0, y, W, itemH, true);
+            display.setColor(80, 160, 255);
+            display.drawRectangle(0, y, 4, itemH, true);
+            display.setColor(255, 255, 255);
+        } else {
+            display.setColor(18, 26, 38);
+            display.drawRectangle(0, y, W, itemH, true);
+            display.setColor(140, 155, 175);
+        }
+
+        display.drawText(12, y + 10, kItems[i], 1);
+
+        // Personalised sub-description when selected
+        if (selected) {
+            char subdesc[64];
+            if (hasEmotion) {
+                snprintf(subdesc, sizeof(subdesc), "%s for %s",
+                         kSubDesc[i],
+                         state.sharedContext.lastEmotion.c_str());
+            } else {
+                snprintf(subdesc, sizeof(subdesc), "%s (neutral default)", kSubDesc[i]);
+            }
+            display.setColor(140, 200, 255);
+            display.drawText(12, y + 26, subdesc, 1);
+        } else {
+            display.setColor(80, 95, 115);
+            display.drawText(12, y + 26, kSubDesc[i], 1);
+        }
+    }
+
+    // ---- Button legend ----
+    UICommon::drawButtonLegend(display,
+        /*S1*/ "--",
+        /*S2*/ "OK",
+        /*S3*/ "OK",
+        /*S4*/ "DOWN",
+        /*S5*/ "UP/BCK");
+}
+
+}  // namespace ScreenHandlers

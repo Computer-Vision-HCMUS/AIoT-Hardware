@@ -27,16 +27,24 @@
 
 // Display resolution and configuration (hardcoded for mhetesp32devkit)
 #define DISPLAY_WIDTH       240
-#define DISPLAY_HEIGHT      240
-#define DISPLAY_ROTATION    2    // 0: normal, 1: 90°, 2: 180°, 3: 270°
+#define DISPLAY_HEIGHT      280
+#define DISPLAY_ROTATION    0    // 0: normal, 1: 90°, 2: 180°, 3: 270°
 
 // ============================================================================
 // Button Pin Configuration
 // ============================================================================
-// Physical buttons for demo navigation
+// Physical buttons for the EmotiCare navigation contract.
+// Adjust these values to match the actual board wiring if your hardware uses different pins.
 
-#define BUTTON_A_PIN        12   // Button A (select/confirm) - changed from 14
-#define BUTTON_B_PIN        13   // Button B (navigation/menu)
+#define MODE_PIN            12   // MODE button
+#define ACTION_PIN          13   // ACTION button
+#define START_PIN           14   // START button
+#define NEXT_PIN            27   // NEXT button
+#define BACK_PIN            26   // BACK button
+
+// Backward-compatible aliases for the earlier two-button demo
+#define BUTTON_A_PIN        MODE_PIN
+#define BUTTON_B_PIN        ACTION_PIN
 
 // Button debounce timing
 #define DEBOUNCE_TIME_MS    100   // 100ms debounce delay (aggressive)
@@ -48,7 +56,6 @@
 // GPIO interrupt settings for button detection
 
 #define BUTTON_INTR_TYPE    GPIO_INTR_NEGEDGE  // Trigger on falling edge (active low)
-#define BUTTON_INTR_LEVEL   GPIO_INTR_LEVEL
 
 // ============================================================================
 // Status Indicators (optional LED pins if available)

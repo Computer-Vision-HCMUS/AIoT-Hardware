@@ -1,12 +1,17 @@
+/**
+ * @file demo_rendering.h
+ * @brief Fallback rendering utilities (error screens only)
+ *
+ * All primary screen rendering is handled by the ScreenHandlers namespace.
+ * This module provides the error fallback only.
+ */
+
 #ifndef DEMO_RENDERING_H
 #define DEMO_RENDERING_H
 
-#include <cstdint>
 #include "display_controller.h"
 
 namespace DemoRendering {
-void renderWelcomeScreen(DisplayController& display, uint64_t boot_time_ms);
-void renderDeviceInfoScreen(DisplayController& display);
 void renderErrorScreen(DisplayController& display, const char* error_msg);
 }  // namespace DemoRendering
 

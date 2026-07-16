@@ -5,6 +5,7 @@
 #include "display_controller.h"
 #include "button_manager.h"
 #include "demo_state_machine.h"
+#include "navigation.h"
 
 class DemoApp {
 public:
@@ -17,15 +18,15 @@ public:
 
 private:
     DisplayController* display_;
-    ButtonManager* buttons_;
-    DemoStateMachine* state_machine_;
+    ButtonManager*     buttons_;
+    DemoStateMachine*  state_machine_;
 
-    bool demo_running_;
-    uint64_t boot_time_ms_;
-    uint64_t last_transition_ms_;
+    bool      demo_running_;
+    uint64_t  boot_time_ms_;
+    uint64_t  last_transition_ms_;
     DemoState last_rendered_state_;
-
-    static constexpr uint64_t MIN_TRANSITION_INTERVAL_MS = 1000;
+    AppState  app_state_;
+    bool      needs_redraw_;  // set true when button pressed (cursor moves same screen)
 };
 
 #endif  // DEMO_APP_H

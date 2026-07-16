@@ -1,7 +1,7 @@
 /**
  * @file test_state_machine.cpp
  * @brief Unit tests for DemoStateMachine class (T033)
- * 
+ *
  * Tests state transitions and navigation logic.
  */
 
@@ -33,52 +33,57 @@ void test_state_machine_init(void) {
 }
 
 /**
- * @test T033.2: Initial state is WELCOME
+ * @test T033.2: Initial state is HOME
  */
-void test_initial_state_is_welcome(void) {
+void test_initial_state_is_home(void) {
     TEST_ASSERT_EQUAL_INT(0, (int)state_machine.getCurrentState());
-    TEST_ASSERT_EQUAL_STRING("WELCOME", state_machine.getStateName());
+    TEST_ASSERT_EQUAL_STRING("HOME", state_machine.getStateName());
 }
 
 /**
- * @test T033.3: Transition from WELCOME to DEVICE_INFO
+ * @test T033.3: Transition from HOME to CHECK_IN
  */
-void test_transition_welcome_to_device_info(void) {
+void test_transition_home_to_check_in(void) {
     state_machine.transitionNext();
     TEST_ASSERT_EQUAL_INT(1, (int)state_machine.getCurrentState());
-    TEST_ASSERT_EQUAL_STRING("DEVICE_INFO", state_machine.getStateName());
+    TEST_ASSERT_EQUAL_STRING("CHECK_IN", state_machine.getStateName());
 }
 
 /**
- * @test T033.4: Transition from DEVICE_INFO to WELCOME
+ * @test T033.4: Back navigation from CHECK_IN returns to HOME
  */
-void test_transition_device_info_to_welcome(void) {
-    state_machine.transitionNext();  // WELCOME -> DEVICE_INFO
-    state_machine.transitionNext();  // DEVICE_INFO -> WELCOME
+void test_transition_back_from_check_in_to_home(void) {
+    state_machine.transitionNext();
+    state_machine.transitionBack();
     TEST_ASSERT_EQUAL_INT(0, (int)state_machine.getCurrentState());
-    TEST_ASSERT_EQUAL_STRING("WELCOME", state_machine.getStateName());
+    TEST_ASSERT_EQUAL_STRING("HOME", state_machine.getStateName());
 }
 
 /**
- * @test T033.5: Cyclic transitions
+ * @test T033.5: Forward navigation advances through the full demo flow
  */
-void test_cyclic_transitions(void) {
-    // Cycle through states multiple times
-    for (int i = 0; i < 5; i++) {
-        state_machine.transitionNext();
-        DemoState state = state_machine.getCurrentState();
-        TEST_ASSERT_TRUE((state == DemoState::DEVICE_INFO || state == DemoState::WELCOME));
-    }
+void test_full_flow_navigation(void) {
+    state_machine.transitionNext();  // HOME -> CHECK_IN
+    state_machine.transitionNext();  // CHECK_IN -> RESULT
+    state_machine.transitionNext();  // RESULT -> SUPPORT
+    state_machine.transitionNext();  // SUPPORT -> ACTIVITY
+    state_machine.transitionNext();  // ACTIVITY -> MUSIC_PODCAST
+    state_machine.transitionNext();  // MUSIC_PODCAST -> CONVERSATION
+    state_machine.transitionNext();  // CONVERSATION -> STATUS
+    state_machine.transitionNext();  // STATUS -> REPORT
+
+    TEST_ASSERT_EQUAL_INT(8, (int)state_machine.getCurrentState());
+    TEST_ASSERT_EQUAL_STRING("REPORT", state_machine.getStateName());
 }
 
 /**
  * @test T033.6: Direct transition to specific state
  */
 void test_direct_transition_to_state(void) {
-    state_machine.transitionTo(DemoState::DEVICE_INFO);
-    TEST_ASSERT_EQUAL_INT(1, (int)state_machine.getCurrentState());
-    
-    state_machine.transitionTo(DemoState::WELCOME);
+    state_machine.transitionTo(DemoState::STATUS);
+    TEST_ASSERT_EQUAL_INT(7, (int)state_machine.getCurrentState());
+
+    state_machine.transitionTo(DemoState::HOME);
     TEST_ASSERT_EQUAL_INT(0, (int)state_machine.getCurrentState());
 }
 
@@ -88,37 +93,42 @@ void test_direct_transition_to_state(void) {
 void test_reset_to_initial_state(void) {
     state_machine.transitionNext();
     TEST_ASSERT_EQUAL_INT(1, (int)state_machine.getCurrentState());
-    
+
     state_machine.reset();
     TEST_ASSERT_EQUAL_INT(0, (int)state_machine.getCurrentState());
-    TEST_ASSERT_EQUAL_STRING("WELCOME", state_machine.getStateName());
+    TEST_ASSERT_EQUAL_STRING("HOME", state_machine.getStateName());
 }
 
 /**
- * @test T033.8: Error state transitions to WELCOME
- */
-void test_error_state_returns_to_welcome(void) {
-    state_machine.transitionTo(DemoState::ERROR_STATE);
-    TEST_ASSERT_EQUAL_INT(2, (int)state_machine.getCurrentState());
-    TEST_ASSERT_EQUAL_STRING("ERROR", state_machine.getStateName());
-    
-    state_machine.transitionNext();
-    TEST_ASSERT_EQUAL_INT(0, (int)state_machine.getCurrentState());
-    TEST_ASSERT_EQUAL_STRING("WELCOME", state_machine.getStateName());
-}
-
-/**
- * @test T033.9: State name accuracy for all states
+ * @test T033.8: State name accuracy for all states
  */
 void test_state_name_accuracy(void) {
-    state_machine.transitionTo(DemoState::WELCOME);
-    TEST_ASSERT_EQUAL_STRING("WELCOME", state_machine.getStateName());
-    
-    state_machine.transitionTo(DemoState::DEVICE_INFO);
-    TEST_ASSERT_EQUAL_STRING("DEVICE_INFO", state_machine.getStateName());
-    
-    state_machine.transitionTo(DemoState::ERROR_STATE);
-    TEST_ASSERT_EQUAL_STRING("ERROR", state_machine.getStateName());
+    state_machine.transitionTo(DemoState::HOME);
+    TEST_ASSERT_EQUAL_STRING("HOME", state_machine.getStateName());
+
+    state_machine.transitionTo(DemoState::CHECK_IN);
+    TEST_ASSERT_EQUAL_STRING("CHECK_IN", state_machine.getStateName());
+
+    state_machine.transitionTo(DemoState::RESULT);
+    TEST_ASSERT_EQUAL_STRING("RESULT", state_machine.getStateName());
+
+    state_machine.transitionTo(DemoState::SUPPORT);
+    TEST_ASSERT_EQUAL_STRING("SUPPORT", state_machine.getStateName());
+
+    state_machine.transitionTo(DemoState::ACTIVITY);
+    TEST_ASSERT_EQUAL_STRING("ACTIVITY", state_machine.getStateName());
+
+    state_machine.transitionTo(DemoState::MUSIC_PODCAST);
+    TEST_ASSERT_EQUAL_STRING("MUSIC_PODCAST", state_machine.getStateName());
+
+    state_machine.transitionTo(DemoState::CONVERSATION);
+    TEST_ASSERT_EQUAL_STRING("CONVERSATION", state_machine.getStateName());
+
+    state_machine.transitionTo(DemoState::STATUS);
+    TEST_ASSERT_EQUAL_STRING("STATUS", state_machine.getStateName());
+
+    state_machine.transitionTo(DemoState::REPORT);
+    TEST_ASSERT_EQUAL_STRING("REPORT", state_machine.getStateName());
 }
 
 // ============================================================================
@@ -128,13 +138,12 @@ void test_state_name_accuracy(void) {
 void run_state_machine_tests(void) {
     UNITY_BEGIN();
     RUN_TEST(test_state_machine_init);
-    RUN_TEST(test_initial_state_is_welcome);
-    RUN_TEST(test_transition_welcome_to_device_info);
-    RUN_TEST(test_transition_device_info_to_welcome);
-    RUN_TEST(test_cyclic_transitions);
+    RUN_TEST(test_initial_state_is_home);
+    RUN_TEST(test_transition_home_to_check_in);
+    RUN_TEST(test_transition_back_from_check_in_to_home);
+    RUN_TEST(test_full_flow_navigation);
     RUN_TEST(test_direct_transition_to_state);
     RUN_TEST(test_reset_to_initial_state);
-    RUN_TEST(test_error_state_returns_to_welcome);
     RUN_TEST(test_state_name_accuracy);
     UNITY_END();
 }

@@ -7,6 +7,7 @@
  */
 
 #include <Arduino.h>
+#include "pins_config.h"
 #include "demo.h"
 
 /**
@@ -14,7 +15,9 @@
  */
 void setup() {
   // Initialize serial for debugging
-  Serial.begin(115200);
+  Serial.begin(DEBUG_BAUD_RATE);
+  pinMode(STATUS_LED_PIN, OUTPUT);
+  digitalWrite(STATUS_LED_PIN, LOW);
   delay(100);
 
   Serial.println("\n\n================================");

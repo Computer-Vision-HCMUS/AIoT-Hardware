@@ -17,8 +17,11 @@
  * @brief Symbolic names for physical buttons
  */
 enum class ButtonID : uint8_t {
-    BUTTON_A = 0,  // Primary button (select/confirm)
-    BUTTON_B = 1   // Secondary button (navigation/menu)
+    MODE = 0,
+    ACTION = 1,
+    START = 2,
+    NEXT = 3,
+    BACK = 4
 };
 
 /**
@@ -98,10 +101,11 @@ public:
 
 private:
     bool initialized_;
-    ButtonState button_states_[2];  // States for BUTTON_A and BUTTON_B
-    bool previous_pressed_[2];      // Previous frame state for edge detection
-    uint32_t debounce_counters_[2]; // Debounce counter for each button
-    bool just_pressed_[2];   
+    static constexpr uint8_t BUTTON_COUNT = 5;
+    ButtonState button_states_[BUTTON_COUNT];
+    bool previous_pressed_[BUTTON_COUNT];
+    uint32_t debounce_counters_[BUTTON_COUNT];
+    bool just_pressed_[BUTTON_COUNT];
 
     /**
      * @brief Internal GPIO interrupt handler

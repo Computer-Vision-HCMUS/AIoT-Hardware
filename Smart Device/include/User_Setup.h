@@ -8,12 +8,12 @@
 #ifndef USER_SETUP_H
 #define USER_SETUP_H
 
+#include "pins_config.h"
+
 // ============================================================================
 // Driver selection
-// ============================================================================
-// Uncomment one driver
-//#define ILI9341_DRIVER       // 240x320 SPI display
-#define ST7789_DRIVER
+// =============================================================================
+#define ST7789_2_DRIVER
 // ============================================================================
 // SPI Port Selection (for ESP32)
 // ============================================================================
@@ -25,24 +25,24 @@
 // ============================================================================
 // Define pins based on our pins_config.h
 
-#define TFT_CS    15   // Chip select control pin (GPIO15)
-#define TFT_RST   16   // Reset pin (GPIO16)
-#define TFT_DC    17   // Data Command control pin (GPIO17)
+#define TFT_CS    DISPLAY_CS_PIN
+#define TFT_RST   DISPLAY_RST_PIN
+#define TFT_DC    DISPLAY_DC_PIN
 
-#define TFT_MOSI  23   // SPI MOSI (GPIO23)
-#define TFT_SCLK  18   // SPI Clock (GPIO18)
-#define TFT_MISO  19   // SPI MISO (GPIO19) - optional for display
+#define TFT_MOSI  DISPLAY_MOSI_PIN
+#define TFT_SCLK  DISPLAY_CLK_PIN
+#define TFT_MISO  DISPLAY_MISO_PIN
 
 // ============================================================================
 // Display Settings
 // ============================================================================
 #define TFT_INIT_DELAY 0
 #define CGRAM_OFFSET 
-#define TFT_WIDTH  240
-#define TFT_HEIGHT 240
+#define TFT_WIDTH  DISPLAY_WIDTH
+#define TFT_HEIGHT DISPLAY_HEIGHT
 
 // Rotation: 0 = no rotation, 1 = 90° CW, 2 = 180°, 3 = 270° CW
-#define TFT_ROTATION 0
+#define TFT_ROTATION DISPLAY_ROTATION
 
 // ============================================================================
 // Font Selection
@@ -54,7 +54,7 @@
 // ============================================================================
 // Color Settings
 // ============================================================================
-#define TFT_BL   -1  // No backlight pin configured
+#define TFT_BL   DISPLAY_BLK_PIN
 #define TFT_BACKLIGHT_ON HIGH
 
 // ============================================================================
