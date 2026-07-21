@@ -14,6 +14,7 @@
  */
 
 #include "navigation.h"
+#include "service.h"
 #include <Arduino.h>
 
 namespace {
@@ -221,17 +222,17 @@ void handleCompanionChatInput(AppState& state, ButtonId button, uint32_t nowMs) 
         if (state.sharedContext.isRecording) {
             state.sharedContext.isRecording = false;
 
-            // Mock transcribed user message
+            // The audio HAL will supply a real transcript when the microphone
+            // is integrated; service calls already use the configured edge API.
             ChatMessage userMsg;
             userMsg.sender    = "user";
-            userMsg.text      = "Hi AI, how are you?";
+            userMsg.text      = stopAudioCapture();
             userMsg.timestamp = nowMs;
             state.sharedContext.chatHistory.push_back(userMsg);
 
-            // Mock AI reply (placeholder — will be replaced by real LLM)
             ChatMessage aiMsg;
             aiMsg.sender    = "ai";
-            aiMsg.text      = "I'm here to help! How are you feeling?";
+            aiMsg.text      = getCompanionReply(userMsg.text);
             aiMsg.timestamp = nowMs + 1;
             state.sharedContext.chatHistory.push_back(aiMsg);
         }

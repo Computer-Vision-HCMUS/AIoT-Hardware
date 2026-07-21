@@ -14,6 +14,9 @@
 #include "core/demo_app.h"
 #include "ui/demo_rendering.h"
 #include "navigation.h"
+#include "network_manager.h"
+#include "edge_api_client.h"
+#include "service.h"
 
 #include "screens/home_screen.h"
 #include "screens/checkin_screen.h"
@@ -35,6 +38,8 @@ DemoApp::DemoApp()
     : display_(nullptr),
       buttons_(nullptr),
       state_machine_(nullptr),
+      network_(nullptr),
+      edge_api_(nullptr),
       audio_(nullptr),
       demo_running_(false),
       boot_time_ms_(0),
@@ -74,6 +79,20 @@ bool DemoApp::init() {
         return false;
     }
 
+    network_ = new NetworkManager();
+    if (network_) {
+        network_->begin();
+        edge_api_ = new EdgeApiClient(*network_);
+        serviceConfigureEdgeApi(edge_api_);
+    }
+
+    network_ = new NetworkManager();
+    if (network_) {
+        network_->begin();
+        edge_api_ = new EdgeApiClient(*network_);
+        serviceConfigureEdgeApi(edge_api_);
+    }
+
     // AudioManager: init I2S drivers.
     // Non-fatal if it fails (device may not have audio hardware yet).
     if (audio_) {
@@ -102,7 +121,7 @@ bool DemoApp::init() {
     app_state_.sharedContext.insightsPeriodIndex = 0;
     app_state_.sharedContext.micPeakLevel        = 0;
     app_state_.sharedContext.audioActive         = false;
-    app_state_.sharedContext.deviceStatus        = "Device Ready";
+    app_state_.sharedContext.deviceStatus        = network_ ? network_->statusLabel().c_str() : "Offline";
 
     demo_running_ = true;
     return true;
@@ -113,6 +132,11 @@ bool DemoApp::init() {
 // ---------------------------------------------------------------------------
 bool DemoApp::update() {
     if (!demo_running_) return false;
+
+    if (network_) {
+        network_->update();
+        app_state_.sharedContext.deviceStatus = network_->statusLabel().c_str();
+    }
 
     // ── Button input ──
     if (buttons_) {
@@ -249,6 +273,9 @@ void DemoApp::stop() {
         audio_ = nullptr;
     }
     demo_running_ = false;
+    serviceConfigureEdgeApi(nullptr);
+    if (edge_api_)      { delete edge_api_;      edge_api_      = nullptr; }
+    if (network_)       { delete network_;       network_       = nullptr; }
     if (display_)       { delete display_;       display_       = nullptr; }
     if (buttons_)       { delete buttons_;       buttons_       = nullptr; }
     if (state_machine_) { delete state_machine_; state_machine_ = nullptr; }

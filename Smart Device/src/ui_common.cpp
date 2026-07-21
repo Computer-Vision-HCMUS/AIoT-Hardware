@@ -4,6 +4,7 @@
  */
 
 #include "ui_common.h"
+#include "display_controller.h"
 #include <Arduino.h>
 #include <cstdio>
 
