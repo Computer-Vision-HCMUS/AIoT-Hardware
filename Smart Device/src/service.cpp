@@ -25,9 +25,7 @@
 
 namespace {
 EdgeApiClient* g_edge_api = nullptr;
-
-// Cache the most recent server session UUID for companion chat
-String g_last_session_id;
+String         g_last_session_id;
 }
 
 void serviceConfigureEdgeApi(EdgeApiClient* client) {
@@ -199,6 +197,13 @@ std::string getCompanionReply(const std::string& userMessage) {
     return std::string(reply);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// UC4 — Audio capture stubs
+//
+// TODO(ai-integration): replace with real I2S microphone HAL:
+//   1. startAudioCapture() → i2s_start() + allocate DMA buffer
+//   2. stopAudioCapture()  → i2s_stop() + call uploadAudio() with buffer
+// ─────────────────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 // UC4 — Audio capture stubs
 //

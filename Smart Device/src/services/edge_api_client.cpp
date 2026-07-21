@@ -130,6 +130,34 @@ bool EdgeApiClient::healthCheck() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Heartbeat — simplest authenticated test
+//
+// POST /api/devices/heartbeat
+// Request:  {} (empty — firmware_version optional)
+// Response: { "device_id":"...", "server_time":"...",
+//             "status":"online", "config_version":"..." }
+// ─────────────────────────────────────────────────────────────────────────────
+
+bool EdgeApiClient::heartbeat() {
+    JsonDocument req;
+    req["firmware_version"] = "1.0.0";
+
+    String payload;
+    serializeJson(req, payload);
+
+    String response;
+    if (!postJson("/api/devices/heartbeat", payload, response)) return false;
+
+    JsonDocument json;
+    if (deserializeJson(json, response) != DeserializationError::Ok) return false;
+
+    EDGE_LOG("heartbeat OK — status=%s  server_time=%s",
+             (const char*)(json["status"]      | "?"),
+             (const char*)(json["server_time"] | "?"));
+    return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // UC1 — Sync emotion session
 //
 // POST /api/emotion-sessions/sync

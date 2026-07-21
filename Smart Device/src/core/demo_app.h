@@ -31,7 +31,7 @@ private:
     uint64_t  last_transition_ms_;
     DemoState last_rendered_state_;
     AppState  app_state_;
-    bool      needs_redraw_;  // set true when button pressed (cursor moves same screen)
+    bool      needs_redraw_;
 };
 
 #endif  // DEMO_APP_H

@@ -43,8 +43,16 @@ public:
 
     // ── Connectivity ──────────────────────────────────────────────────────
 
-    /** GET /  — returns true if the server root is reachable. */
+    /** GET /  — returns true if the server root is reachable (no auth needed). */
     bool healthCheck();
+
+    /**
+     * POST /api/devices/heartbeat
+     * Simplest authenticated ping — confirms Wi-Fi + token + server all work.
+     * Logs server_time and status to Serial when EDGE_API_DEBUG=1.
+     * Returns true on HTTP 200.
+     */
+    bool heartbeat();
 
     // ── UC1 — Emotion check-in ────────────────────────────────────────────
 

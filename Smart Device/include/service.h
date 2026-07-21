@@ -3,11 +3,13 @@
 
 /**
  * @file service.h
- * @brief Mock service API for EmotiCare UI Shell (spec 005)
+ * @brief Service layer — bridges UI screens to EdgeApiClient.
  *
- * All functions declared here are PLACEHOLDER implementations returning
- * hardcoded mock data. They are isolated in this module for easy removal
- * and replacement with real Edge AI / cloud integrations in future phases.
+ * Configure the edge API provider at startup:
+ *   serviceConfigureEdgeApi(edge_api_ptr);
+ *
+ * When the provider is null, functions fall back to hardcoded mock data
+ * so the device stays usable offline.
  *
  * Search tag: // TODO(ai-integration)
  */
@@ -19,52 +21,27 @@
 
 class EdgeApiClient;
 
-// Optional LAN edge-AI provider. When unavailable, the UI continues with its
-// deterministic demo responses so an offline device never becomes unusable.
+// ── Provider configuration ────────────────────────────────────────────────
 void serviceConfigureEdgeApi(EdgeApiClient* client);
 
-// ---------------------------------------------------------------------------
-// Emotion Detection
-// ---------------------------------------------------------------------------
-
-// TODO(ai-integration): replace with real Edge AI Speech Emotion Recognition
+// ── UC1 — Emotion Detection ───────────────────────────────────────────────
 EmotionResult runEmotionDetection();
 
-// ---------------------------------------------------------------------------
-// Activity Recommendation
-// ---------------------------------------------------------------------------
-
-// TODO(ai-integration): replace with real cloud recommendation payload
+// ── UC1 — Activity Recommendation ────────────────────────────────────────
 ActivityCard getRecommendedActivity(const std::string& emotion);
 
-// ---------------------------------------------------------------------------
-// Content Recommendations
-// ---------------------------------------------------------------------------
-
-// TODO(ai-integration): replace with real music catalog integration
-std::vector<Song> getRecommendedMusic();
-
-// TODO(ai-integration): replace with real podcast catalog integration
+// ── UC2/UC3 — Content ─────────────────────────────────────────────────────
+std::vector<Song>           getRecommendedMusic();
 std::vector<PodcastEpisode> getRecommendedPodcast();
 
-// ---------------------------------------------------------------------------
-// Companion Chat
-// ---------------------------------------------------------------------------
-
-// TODO(ai-integration): replace with real LLM / chat backend
+// ── UC4 — Companion Chat ──────────────────────────────────────────────────
 std::string getCompanionReply(const std::string& userMessage);
 
-// TODO(ai-integration): replace with real microphone input start
-void startAudioCapture();
-
-// TODO(ai-integration): replace with real microphone input stop + STT
+// TODO(ai-integration): replace with real I2S microphone HAL
+void        startAudioCapture();
 std::string stopAudioCapture();
 
-// ---------------------------------------------------------------------------
-// Insights / Statistics
-// ---------------------------------------------------------------------------
-
-// TODO(ai-integration): replace with real report aggregation from persisted data
+// ── UC5 — Insights / Statistics ───────────────────────────────────────────
 EmotionDistribution getStatisticsByPeriod(const std::string& period);
 
 #endif  // SERVICE_H
