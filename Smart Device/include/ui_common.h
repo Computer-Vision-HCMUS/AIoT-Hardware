@@ -3,7 +3,10 @@
 
 #include <cstdint>
 #include <string>
-#include "display_controller.h"
+#include <memory>
+
+// Forward-declare DisplayController to avoid include-path issues in IDEs.
+class DisplayController;
 
 namespace UICommon {
 

@@ -7,6 +7,9 @@
 #include "demo_state_machine.h"
 #include "navigation.h"
 
+class NetworkManager;
+class EdgeApiClient;
+
 class DemoApp {
 public:
     DemoApp();
@@ -20,6 +23,8 @@ private:
     DisplayController* display_;
     ButtonManager*     buttons_;
     DemoStateMachine*  state_machine_;
+    NetworkManager*    network_;
+    EdgeApiClient*     edge_api_;
 
     bool      demo_running_;
     uint64_t  boot_time_ms_;
