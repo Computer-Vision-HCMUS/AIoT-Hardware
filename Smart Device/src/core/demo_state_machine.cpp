@@ -37,6 +37,7 @@ const char* DemoStateMachine::getStateName() const {
         case DemoState::PODCAST_LIST:   return "PODCAST_LIST";
         case DemoState::COMPANION_CHAT: return "COMPANION_CHAT";
         case DemoState::INSIGHTS:       return "INSIGHTS";
+        case DemoState::MIC_TEST:       return "MIC_TEST";
         case DemoState::ERROR_STATE:    return "ERROR";
         default:                        return "UNKNOWN";
     }

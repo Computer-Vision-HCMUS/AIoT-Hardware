@@ -46,6 +46,7 @@ void handleButtonPress(AppState& state, ButtonId button) {
             handleCompanionChatInput(state, button, (uint32_t)(millis()));
             break;
         case ScreenId::INSIGHTS:       handleInsightsInput(state, button);      break;
+        case ScreenId::MIC_TEST:       handleMicTestInput(state, button);       break;
     }
 }
 
@@ -60,7 +61,7 @@ void handleButtonPress(AppState& state, ButtonId button) {
 //   MODE(0)   = unused on HOME
 // ---------------------------------------------------------------------------
 void handleHomeInput(AppState& state, ButtonId button) {
-    constexpr uint8_t kMenuItems = 4;  // Check-In, Discover, Chat, Insights
+    constexpr uint8_t kMenuItems = 5;  // Check-In, Discover, Chat, Insights, Test Mic
     if (button == ButtonId::NEXT) {
         // Move cursor DOWN
         if (state.homeMenuIndex + 1 < kMenuItems) {
@@ -78,6 +79,7 @@ void handleHomeInput(AppState& state, ButtonId button) {
             case 1: pushScreen(state, ScreenId::DISCOVER);       break;
             case 2: pushScreen(state, ScreenId::COMPANION_CHAT); break;
             case 3: pushScreen(state, ScreenId::INSIGHTS);       break;
+            case 4: pushScreen(state, ScreenId::MIC_TEST);       break;
         }
     }
 }
@@ -266,6 +268,18 @@ void handleInsightsInput(AppState& state, ButtonId button) {
 }
 
 // ---------------------------------------------------------------------------
+// MIC_TEST — audio passthrough (started/stopped by demo_app on screen enter/leave)
+//
+// Button map:
+//   BACK(4) = return HOME (demo_app will call stopPassthrough)
+// ---------------------------------------------------------------------------
+void handleMicTestInput(AppState& state, ButtonId button) {
+    if (button == ButtonId::BACK) {
+        goBack(state);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Stack operations
 // ---------------------------------------------------------------------------
 void pushScreen(AppState& state, ScreenId nextScreen) {
@@ -305,6 +319,7 @@ const char* screenIdToString(ScreenId screen) {
         case ScreenId::PODCAST_LIST:   return "PODCAST_LIST";
         case ScreenId::COMPANION_CHAT: return "COMPANION_CHAT";
         case ScreenId::INSIGHTS:       return "INSIGHTS";
+        case ScreenId::MIC_TEST:       return "MIC_TEST";
         default:                       return "UNKNOWN";
     }
 }

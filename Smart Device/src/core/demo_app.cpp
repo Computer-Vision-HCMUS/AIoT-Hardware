@@ -4,18 +4,17 @@
  *
  * Coordinates:
  *  - DisplayController (TFT rendering)
- *  - ButtonManager (GPIO debounce)
- *  - DemoStateMachine (thin state wrapper)
- *  - AppState / navigation (8-screen state machine, context-sensitive buttons)
+ *  - ButtonManager     (GPIO debounce)
+ *  - DemoStateMachine  (thin state wrapper)
+ *  - AppState / navigation (9-screen state machine, context-sensitive buttons)
+ *  - AudioManager      (I2S passthrough: INMP441 → MAX98357, MIC_TEST screen)
  *  - Screen handler draw functions (one per screen)
  */
 
 #include "core/demo_app.h"
 #include "ui/demo_rendering.h"
-#include "demo.h"
 #include "navigation.h"
 
-// New screen handlers
 #include "screens/home_screen.h"
 #include "screens/checkin_screen.h"
 #include "screens/support_screen.h"
@@ -24,23 +23,28 @@
 #include "screens/podcast_list_screen.h"
 #include "screens/companion_chat_screen.h"
 #include "screens/insights_screen.h"
+#include "screens/mic_test_screen.h"
 
 #include <Arduino.h>
 #include <esp_timer.h>
 
 // ---------------------------------------------------------------------------
-// Constructor / init / teardown
+// Constructor
 // ---------------------------------------------------------------------------
 DemoApp::DemoApp()
     : display_(nullptr),
       buttons_(nullptr),
       state_machine_(nullptr),
+      audio_(nullptr),
       demo_running_(false),
       boot_time_ms_(0),
       last_transition_ms_(0),
       last_rendered_state_(DemoState::HOME),
       needs_redraw_(true) {}
 
+// ---------------------------------------------------------------------------
+// init()
+// ---------------------------------------------------------------------------
 bool DemoApp::init() {
     if (demo_running_) return true;
 
@@ -49,6 +53,7 @@ bool DemoApp::init() {
     display_       = new DisplayController();
     buttons_       = new ButtonManager();
     state_machine_ = new DemoStateMachine();
+    audio_         = new AudioManager();
 
     if (!display_ || !display_->init()) {
         DemoRendering::renderErrorScreen(*display_, "Display init failed!");
@@ -69,22 +74,34 @@ bool DemoApp::init() {
         return false;
     }
 
-    // ---------- initialise app state ----------
+    // AudioManager: init I2S drivers.
+    // Non-fatal if it fails (device may not have audio hardware yet).
+    if (audio_) {
+        if (!audio_->init()) {
+            Serial.println("[App] WARNING: AudioManager init failed — mic test unavailable");
+            delete audio_;
+            audio_ = nullptr;
+        }
+    }
+
+    // ── Initialise AppState ──
     app_state_.currentScreen  = ScreenId::HOME;
     app_state_.previousScreen = ScreenId::HOME;
     app_state_.historySize    = 0;
 
-    app_state_.homeMenuIndex     = 0;
-    app_state_.discoverIndex     = 0;
-    app_state_.musicScrollIndex  = 0;
-    app_state_.podcastScrollIndex= 0;
-    app_state_.checkInAnalyzing  = true;
+    app_state_.homeMenuIndex      = 0;
+    app_state_.discoverIndex      = 0;
+    app_state_.musicScrollIndex   = 0;
+    app_state_.podcastScrollIndex = 0;
+    app_state_.checkInAnalyzing   = true;
 
     app_state_.sharedContext.lastEmotion         = "Neutral";
     app_state_.sharedContext.confidence          = 0;
     app_state_.sharedContext.isRecording         = false;
     app_state_.sharedContext.recordingStartMs    = 0;
     app_state_.sharedContext.insightsPeriodIndex = 0;
+    app_state_.sharedContext.micPeakLevel        = 0;
+    app_state_.sharedContext.audioActive         = false;
     app_state_.sharedContext.deviceStatus        = "Device Ready";
 
     demo_running_ = true;
@@ -92,19 +109,19 @@ bool DemoApp::init() {
 }
 
 // ---------------------------------------------------------------------------
-// Main update loop (called from loop() in main.cpp)
+// update() — called from loop()
 // ---------------------------------------------------------------------------
 bool DemoApp::update() {
     if (!demo_running_) return false;
 
-    // ---- Process button input ----
+    // ── Button input ──
     if (buttons_) {
         buttons_->update();
 
         ButtonId pressed = ButtonId::MODE;
         bool any = false;
 
-        if (buttons_->wasPressed(ButtonID::MODE))   { pressed = ButtonId::MODE;   any = true; }
+        if      (buttons_->wasPressed(ButtonID::MODE))   { pressed = ButtonId::MODE;   any = true; }
         else if (buttons_->wasPressed(ButtonID::ACTION)) { pressed = ButtonId::ACTION; any = true; }
         else if (buttons_->wasPressed(ButtonID::START))  { pressed = ButtonId::START;  any = true; }
         else if (buttons_->wasPressed(ButtonID::NEXT))   { pressed = ButtonId::NEXT;   any = true; }
@@ -112,13 +129,13 @@ bool DemoApp::update() {
 
         if (any) {
             handleButtonPress(app_state_, pressed);
-            needs_redraw_ = true;  // always redraw on any button press
+            needs_redraw_ = true;
             Serial.print("[App] Button -> Screen: ");
             Serial.println(screenIdToString(app_state_.currentScreen));
         }
     }
 
-    // ---- Sync state machine with app_state ----
+    // ── Sync DemoStateMachine with AppState ──
     if (state_machine_) {
         DemoState target = DemoState::HOME;
         switch (app_state_.currentScreen) {
@@ -130,19 +147,55 @@ bool DemoApp::update() {
             case ScreenId::PODCAST_LIST:   target = DemoState::PODCAST_LIST;   break;
             case ScreenId::COMPANION_CHAT: target = DemoState::COMPANION_CHAT; break;
             case ScreenId::INSIGHTS:       target = DemoState::INSIGHTS;       break;
+            case ScreenId::MIC_TEST:       target = DemoState::MIC_TEST;       break;
         }
-        state_machine_->transitionTo(target);
-    }
 
-    // ---- Render if state changed ----
-    if (state_machine_) {
-        DemoState current = state_machine_->getCurrentState();
-        if (current != last_rendered_state_ || needs_redraw_) {
+        DemoState current = target;
+        bool stateChanged = (current != last_rendered_state_);
+
+        state_machine_->transitionTo(current);
+
+        // ── Handle screen transitions for audio ──
+        if (stateChanged) {
+            // Leaving MIC_TEST → stop audio
+            if (last_rendered_state_ == DemoState::MIC_TEST && audio_) {
+                audio_->stopPassthrough();
+                app_state_.sharedContext.audioActive  = false;
+                app_state_.sharedContext.micPeakLevel = 0;
+            }
+            // Entering MIC_TEST → start audio
+            if (current == DemoState::MIC_TEST && audio_) {
+                audio_->startPassthrough();
+                app_state_.sharedContext.audioActive = true;
+            }
+            // Returning to HOME → reset check-in state
+            if (current == DemoState::HOME) {
+                app_state_.checkInAnalyzing = true;
+            }
+        }
+
+        // ── Live updates without button press ──
+        // MIC_TEST: always redraw so VU meter animates
+        if (current == DemoState::MIC_TEST) {
+            if (audio_) {
+                app_state_.sharedContext.micPeakLevel = audio_->getPeakLevel();
+                app_state_.sharedContext.audioActive  = audio_->isActive();
+            }
+            needs_redraw_ = true;
+        }
+
+        // COMPANION_CHAT: redraw while recording for live timer
+        if (current == DemoState::COMPANION_CHAT &&
+            app_state_.sharedContext.isRecording) {
+            needs_redraw_ = true;
+        }
+
+        // ── Render if state changed or input received ──
+        if (stateChanged || needs_redraw_) {
             needs_redraw_ = false;
+
             switch (current) {
                 case DemoState::HOME:
-                    // Reset check-in state when returning to home
-                    app_state_.checkInAnalyzing = true;
                     ScreenHandlers::drawHomeScreen(*display_, app_state_);
                     break;
                 case DemoState::CHECK_IN:
@@ -166,6 +219,9 @@ bool DemoApp::update() {
                 case DemoState::INSIGHTS:
                     ScreenHandlers::drawInsightsScreen(*display_, app_state_);
                     break;
+                case DemoState::MIC_TEST:
+                    ScreenHandlers::drawMicTestScreen(*display_, app_state_);
+                    break;
                 case DemoState::ERROR_STATE:
                     DemoRendering::renderErrorScreen(*display_, "System Error!");
                     state_machine_->transitionTo(DemoState::HOME);
@@ -174,13 +230,8 @@ bool DemoApp::update() {
                     ScreenHandlers::drawHomeScreen(*display_, app_state_);
                     break;
             }
-            last_rendered_state_ = current;
-        }
 
-        // ---- Live update for recording timer (redraw when recording) ----
-        if (app_state_.currentScreen == ScreenId::COMPANION_CHAT &&
-            app_state_.sharedContext.isRecording) {
-            ScreenHandlers::drawCompanionChatScreen(*display_, app_state_);
+            last_rendered_state_ = current;
         }
     }
 
@@ -191,6 +242,12 @@ bool DemoApp::update() {
 bool DemoApp::isRunning() const { return demo_running_; }
 
 void DemoApp::stop() {
+    if (audio_) {
+        audio_->stopPassthrough();
+        audio_->deinit();
+        delete audio_;
+        audio_ = nullptr;
+    }
     demo_running_ = false;
     if (display_)       { delete display_;       display_       = nullptr; }
     if (buttons_)       { delete buttons_;       buttons_       = nullptr; }

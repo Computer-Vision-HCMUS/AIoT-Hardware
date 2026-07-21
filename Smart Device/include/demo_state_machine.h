@@ -23,7 +23,8 @@ enum class DemoState : uint8_t {
     PODCAST_LIST   = 5,  ///< Scrollable podcast recommendations
     COMPANION_CHAT = 6,  ///< Voice conversation interface (UI simulation)
     INSIGHTS       = 7,  ///< Emotion statistics by time period
-    ERROR_STATE    = 8   ///< Fault / error fallback
+    MIC_TEST       = 8,  ///< Live audio passthrough: INMP441 → MAX98357
+    ERROR_STATE    = 9   ///< Fault / error fallback
 };
 
 /**

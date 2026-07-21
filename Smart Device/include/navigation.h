@@ -18,7 +18,8 @@ enum class ScreenId : uint8_t {
     MUSIC_LIST     = 4,
     PODCAST_LIST   = 5,
     COMPANION_CHAT = 6,
-    INSIGHTS       = 7
+    INSIGHTS       = 7,
+    MIC_TEST       = 8   ///< Audio passthrough test (INMP441 → MAX98357)
 };
 
 // ---------------------------------------------------------------------------
@@ -49,6 +50,10 @@ struct SharedContext {
     // INSIGHTS state
     uint8_t insightsPeriodIndex; // 0=Day,1=Week,2=Month
 
+    // MIC_TEST / Audio state
+    uint16_t micPeakLevel;   // 0–100, updated each frame by demo_app
+    bool     audioActive;    // true while I2S passthrough task is running
+
     // Device status
     std::string deviceStatus;   // e.g. "Device Ready"
 };
@@ -66,7 +71,7 @@ struct AppState {
     uint8_t historySize;
 
     // Per-screen selection cursors
-    uint8_t homeMenuIndex;    // 0=Check-In,1=Discover,2=Chat,3=Insights
+    uint8_t homeMenuIndex;    // 0=Check-In,1=Discover,2=Chat,3=Insights,4=TestMic
     uint8_t discoverIndex;    // 0=Music, 1=Podcast
     uint8_t musicScrollIndex;
     uint8_t podcastScrollIndex;
@@ -89,6 +94,7 @@ void handleMusicListInput(AppState& state, ButtonId button);
 void handlePodcastListInput(AppState& state, ButtonId button);
 void handleCompanionChatInput(AppState& state, ButtonId button, uint32_t nowMs);
 void handleInsightsInput(AppState& state, ButtonId button);
+void handleMicTestInput(AppState& state, ButtonId button);
 
 void pushScreen(AppState& state, ScreenId nextScreen);
 void goBack(AppState& state);

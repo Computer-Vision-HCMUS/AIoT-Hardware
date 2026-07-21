@@ -6,6 +6,7 @@
 #include "button_manager.h"
 #include "demo_state_machine.h"
 #include "navigation.h"
+#include "hal/audio_manager.h"
 
 class DemoApp {
 public:
@@ -20,6 +21,7 @@ private:
     DisplayController* display_;
     ButtonManager*     buttons_;
     DemoStateMachine*  state_machine_;
+    AudioManager*      audio_;
 
     bool      demo_running_;
     uint64_t  boot_time_ms_;
