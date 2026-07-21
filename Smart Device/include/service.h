@@ -17,6 +17,12 @@
 #include <vector>
 #include "mock_data.h"
 
+class EdgeApiClient;
+
+// Optional LAN edge-AI provider. When unavailable, the UI continues with its
+// deterministic demo responses so an offline device never becomes unusable.
+void serviceConfigureEdgeApi(EdgeApiClient* client);
+
 // ---------------------------------------------------------------------------
 // Emotion Detection
 // ---------------------------------------------------------------------------
