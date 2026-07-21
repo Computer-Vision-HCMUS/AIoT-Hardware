@@ -71,4 +71,27 @@
 
 #define DEBUG_BAUD_RATE     115200
 
+// ============================================================================
+// I2S Microphone Pin Configuration (INMP441 or compatible MEMS mic)
+// ============================================================================
+// TODO(hardware): confirm actual wiring with schematic before flashing
+// These are placeholder assignments — adjust to match physical board.
+
+#define I2S_MIC_SCK_PIN     32   // Serial Clock (BCLK)
+#define I2S_MIC_WS_PIN      33   // Word Select  (LRCLK)
+#define I2S_MIC_SD_PIN      34   // Serial Data  (DOUT from mic → ESP32 input)
+
+// I2S driver settings
+#define I2S_PORT_NUM        I2S_NUM_0
+#define I2S_SAMPLE_RATE     16000   // 16 kHz — optimal for Whisper STT
+#define I2S_SAMPLE_BITS     16      // 16-bit PCM
+#define I2S_CHANNEL_FMT     I2S_CHANNEL_FMT_ONLY_LEFT  // mono mic
+#define I2S_DMA_BUF_COUNT   4
+#define I2S_DMA_BUF_LEN     256
+
+// Audio capture settings
+#define AUDIO_MAX_RECORD_MS 8000    // max 8 seconds per recording
+#define AUDIO_BUFFER_BYTES  (I2S_SAMPLE_RATE * (I2S_SAMPLE_BITS / 8) * (AUDIO_MAX_RECORD_MS / 1000))
+//                          = 16000 * 2 * 8 = 256 000 bytes (~256 KB)
+
 #endif // PINS_CONFIG_H

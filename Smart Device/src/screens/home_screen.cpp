@@ -35,13 +35,14 @@ void drawHomeScreen(DisplayController& display, const AppState& state) {
     UICommon::drawDivider(display, 28);
 
     // ---- Status strip ----
-    // Internet status (mock — always Online in this phase)
-    display.setColor(80, 200, 100);
+    // Network status is supplied by NetworkManager (Online / Setup AP / Offline).
+    const bool online = state.sharedContext.deviceStatus == "Online";
+    display.setColor(online ? 80 : 210, online ? 200 : 150, online ? 100 : 70);
     display.drawText(6, 33, "WiFi", 1);
     display.setColor(50, 70, 90);
     display.drawText(30, 33, "|", 1);
-    display.setColor(100, 220, 120);
-    display.drawText(38, 33, "Online", 1);
+    display.setColor(online ? 100 : 240, online ? 220 : 180, online ? 120 : 90);
+    display.drawText(38, 33, state.sharedContext.deviceStatus, 1);
 
     // Separator between WiFi and emotion
     display.setColor(50, 70, 90);
