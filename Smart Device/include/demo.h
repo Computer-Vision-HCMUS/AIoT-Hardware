@@ -37,6 +37,13 @@ bool demo_update();
 bool demo_is_running();
 
 /**
+ * @brief Check if device is in provisioning (AP) mode
+ * 
+ * @return true if provisioning portal is active and waiting for setup
+ */
+bool demo_is_provisioning();
+
+/**
  * @brief Stop the demo and clean up resources
  */
 void demo_stop();

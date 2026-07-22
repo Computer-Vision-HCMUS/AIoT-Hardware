@@ -207,6 +207,10 @@ bool DemoApp::update() {
 // ---------------------------------------------------------------------------
 bool DemoApp::isRunning() const { return demo_running_; }
 
+bool DemoApp::isProvisioning() const {
+    return network_ != nullptr && network_->isProvisioning();
+}
+
 void DemoApp::stop() {
     demo_running_ = false;
     serviceConfigureEdgeApi(nullptr);
