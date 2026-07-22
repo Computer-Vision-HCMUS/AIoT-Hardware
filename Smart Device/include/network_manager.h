@@ -2,6 +2,7 @@
 #define NETWORK_MANAGER_H
 
 #include <Arduino.h>
+#include <DNSServer.h>
 #include <WebServer.h>
 
 /**
@@ -29,6 +30,13 @@ public:
 
     /** Must be called every loop() iteration. */
     void update();
+
+    // ── WiFi mode control ─────────────────────────────────────────────────
+    /** Disconnect from WiFi and start AP provisioning portal. */
+    void startProvisioningAp();
+
+    /** Connect using saved NVS credentials (if any). */
+    bool reconnectWifi();
 
     // ── Status ────────────────────────────────────────────────────────────
     bool   isConnected()    const;
@@ -67,10 +75,12 @@ private:
 
     // ── Internal state ────────────────────────────────────────────────────
     WebServer server_;
+    DNSServer dns_server_;
     String    server_base_url_;
     String    device_token_;
     String    device_id_;
     bool      provisioning_;
+    bool      portal_routes_registered_;
     unsigned long last_reconnect_attempt_ms_;
 };
 

@@ -19,7 +19,8 @@ enum class ScreenId : uint8_t {
     PODCAST_LIST   = 5,
     COMPANION_CHAT = 6,
     INSIGHTS       = 7,
-    MIC_TEST       = 8   ///< Audio passthrough test (INMP441 → MAX98357)
+    MIC_TEST       = 8,  ///< Audio passthrough test (INMP441 → MAX98357)
+    WIFI_SETUP     = 9   ///< WiFi mode toggle (connected ↔ AP provisioning)
 };
 
 // ---------------------------------------------------------------------------
@@ -75,9 +76,15 @@ struct AppState {
     uint8_t discoverIndex;    // 0=Music, 1=Podcast
     uint8_t musicScrollIndex;
     uint8_t podcastScrollIndex;
+    uint8_t supportActivityIndex;
+    bool    supportShowingDetail;
+    std::vector<ActivityCard> supportActivities;
 
     // Check-in sub-state
     bool    checkInAnalyzing; // true while showing "analyzing..." phase
+
+    // WiFi Setup sub-state
+    uint8_t wifiSetupMenuIndex; // 0 = toggle mode, 1 = back
 
     SharedContext sharedContext;
 };
@@ -95,6 +102,7 @@ void handlePodcastListInput(AppState& state, ButtonId button);
 void handleCompanionChatInput(AppState& state, ButtonId button, uint32_t nowMs);
 void handleInsightsInput(AppState& state, ButtonId button);
 void handleMicTestInput(AppState& state, ButtonId button);
+void handleWifiSetupInput(AppState& state, ButtonId button);
 
 void pushScreen(AppState& state, ScreenId nextScreen);
 void goBack(AppState& state);

@@ -252,8 +252,10 @@ bool EdgeApiClient::syncEmotionSession(const String& emotion, float confidence,
 //             "status": "success" }
 // ─────────────────────────────────────────────────────────────────────────────
 
-bool EdgeApiClient::getActivityRecommendation(const String& sessionId,
-                                              ActivityCard& activity) {
+bool EdgeApiClient::getActivityRecommendations(
+    const String& sessionId, std::vector<ActivityCard>& activities) {
+    activities.clear();
+
     JsonDocument req;
     req["session_id"] = sessionId;
 
@@ -266,16 +268,20 @@ bool EdgeApiClient::getActivityRecommendation(const String& sessionId,
     JsonDocument json;
     if (deserializeJson(json, response) != DeserializationError::Ok) return false;
 
-    // Find first card with type == "activity"
+    // Keep every activity card so the Support screen can show a selectable list.
     for (JsonObject card : json["cards"].as<JsonArray>()) {
         const String type = card["type"] | "";
         if (type == "activity") {
+            ActivityCard activity;
             activity.title       = (const char*)(card["title"] | "");
             activity.description = (const char*)(card["body"]  | "");
-            if (!activity.title.empty()) return true;
+            activity.actionId    = (const char*)(card["action_id"] | "");
+            if (!activity.title.empty()) {
+                activities.push_back(activity);
+            }
         }
     }
-    return false;
+    return !activities.empty();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

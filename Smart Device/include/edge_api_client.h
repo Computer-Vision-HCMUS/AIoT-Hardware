@@ -74,13 +74,13 @@ public:
      *
      * POST /api/recommendations/request  { "session_id": <uuid> }
      *
-     * Extracts the first "activity" type card and fills @p activity.
+     * Extracts all "activity" cards and fills @p activities.
      *
      * @param sessionId  UUID returned by syncEmotionSession()
-     * @param activity   OUT — first activity card (title + description)
+     * @param activities OUT — activity cards (title + description)
      */
-    bool getActivityRecommendation(const String& sessionId,
-                                   ActivityCard& activity);
+    bool getActivityRecommendations(const String& sessionId,
+                                    std::vector<ActivityCard>& activities);
 
     // ── UC2 — Content recommendations ────────────────────────────────────
 

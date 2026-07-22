@@ -34,6 +34,9 @@ constexpr char kKeyDeviceId[]      = "device_id";
 
 constexpr char kApSsid[]           = "EmotiCare-Setup";
 constexpr char kApPassword[]       = "emotioncare";
+const IPAddress kApIp(192, 168, 4, 1);
+const IPAddress kApGateway(192, 168, 4, 1);
+const IPAddress kApSubnet(255, 255, 255, 0);
 constexpr char kDeviceName[]       = "EmotiCare-ESP32";
 constexpr char kFirmwareVersion[]  = "1.0.0";
 constexpr unsigned long kReconnectEveryMs = 15000;
@@ -47,7 +50,9 @@ constexpr char kPairPath[]         = "/api/devices/pair";
 // ─────────────────────────────────────────────────────────────────────────────
 
 NetworkManager::NetworkManager()
-    : server_(80), provisioning_(false), last_reconnect_attempt_ms_(0) {}
+    : server_(80), provisioning_(false),
+      portal_routes_registered_(false),
+      last_reconnect_attempt_ms_(0) {}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public interface
@@ -67,6 +72,7 @@ void NetworkManager::update() {
         // Call handleClient multiple times to avoid browser timeouts
         // during long TFT render cycles in the main loop
         for (int i = 0; i < 5; i++) {
+            dns_server_.processNextRequest();
             server_.handleClient();
             delay(2);
         }
@@ -92,6 +98,39 @@ String NetworkManager::statusLabel() const {
     if (isConnected())               return "Unpaired";
     if (provisioning_)               return "Setup AP";
     return "Offline";
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WiFi mode control
+// ─────────────────────────────────────────────────────────────────────────────
+
+void NetworkManager::startProvisioningAp() {
+    // Stop STA connection if active
+    if (provisioning_) {
+        // Already in AP mode — nothing to do
+        Serial.println("[Network] Already in AP mode");
+        return;
+    }
+    WiFi.disconnect(true);
+    delay(200);
+    startProvisioningPortal();
+}
+
+bool NetworkManager::reconnectWifi() {
+    if (provisioning_) {
+        // Tear down AP before connecting as STA
+        server_.stop();
+        provisioning_ = false;
+        WiFi.softAPdisconnect(true);
+        delay(200);
+    }
+    const bool ok = connectSavedNetwork();
+    if (!ok) {
+        // No saved credentials or network unreachable — go back to AP
+        Serial.println("[Network] Reconnect failed — falling back to AP mode");
+        startProvisioningPortal();
+    }
+    return ok;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -128,65 +167,115 @@ void NetworkManager::startProvisioningPortal() {
     delay(100);
     WiFi.mode(WIFI_AP_STA);  // dual mode: AP stays alive while connecting to STA
     delay(100);
-    WiFi.softAP(kApSsid, kApPassword);
+    if (!WiFi.softAPConfig(kApIp, kApGateway, kApSubnet) ||
+        !WiFi.softAP(kApSsid, kApPassword)) {
+        Serial.println("[Network] ERROR: failed to start setup AP");
+        return;
+    }
     delay(500);  // wait for AP to be fully ready before starting WebServer
 
     provisioning_ = true;
     Serial.printf("[Network] Setup AP: %s  open http://%s\n",
                   kApSsid, WiFi.softAPIP().toString().c_str());
 
-    // GET / — show provisioning form
-    server_.on("/", HTTP_GET, [this]() {
-        server_.send(200, "text/html", portalPage());
-    });
+    // ── Register routes only once — re-registering causes conflicts ───────
+    if (!portal_routes_registered_) {
+        portal_routes_registered_ = true;
 
-    // POST /save — save config, attempt pairing, restart
-    server_.on("/save", HTTP_POST, [this]() {
-        const String ssid       = server_.arg("ssid");
-        const String password   = server_.arg("password");
-        const String serverUrl  = server_.arg("server_url");
-        const String pairingCode = server_.arg("pairing_code");
+        // Main setup form
+        server_.on("/", HTTP_GET, [this]() {
+            server_.send(200, "text/html", portalPage());
+        });
 
-        if (ssid.isEmpty() || serverUrl.isEmpty() || pairingCode.isEmpty()) {
-            server_.send(400, "text/plain",
-                         "SSID, server URL and pairing code are required.");
-            return;
-        }
+        // Android captive portal probes
+        server_.on("/generate_204", HTTP_GET, [this]() {
+            server_.sendHeader("Location", "http://192.168.4.1/", true);
+            server_.send(302, "text/plain", "");
+        });
+        server_.on("/gen_204", HTTP_GET, [this]() {
+            server_.sendHeader("Location", "http://192.168.4.1/", true);
+            server_.send(302, "text/plain", "");
+        });
 
-        // 1. Save Wi-Fi credentials first
-        saveWifiConfig(ssid, password);
+        // iOS / macOS captive portal probes
+        server_.on("/hotspot-detect.html", HTTP_GET, [this]() {
+            server_.sendHeader("Location", "http://192.168.4.1/", true);
+            server_.send(302, "text/plain", "");
+        });
+        server_.on("/library/test/success.html", HTTP_GET, [this]() {
+            server_.sendHeader("Location", "http://192.168.4.1/", true);
+            server_.send(302, "text/plain", "");
+        });
 
-        // 2. Connect to the network (keep AP alive with WIFI_AP_STA)
-        WiFi.begin(ssid.c_str(), password.c_str());
-        const unsigned long t0 = millis();
-        while (WiFi.status() != WL_CONNECTED && millis() - t0 < 10000) {
-            server_.handleClient();  // keep AP alive during connect wait
-            delay(100);
-        }
+        // Windows NCSI probes
+        server_.on("/ncsi.txt", HTTP_GET, [this]() {
+            server_.sendHeader("Location", "http://192.168.4.1/", true);
+            server_.send(302, "text/plain", "");
+        });
+        server_.on("/fwlink", HTTP_GET, [this]() {
+            server_.sendHeader("Location", "http://192.168.4.1/", true);
+            server_.send(302, "text/plain", "");
+        });
+        server_.on("/connecttest.txt", HTTP_GET, [this]() {
+            server_.sendHeader("Location", "http://192.168.4.1/", true);
+            server_.send(302, "text/plain", "");
+        });
 
-        if (WiFi.status() != WL_CONNECTED) {
-            server_.send(502, "text/plain",
-                         "Could not connect to Wi-Fi. Check SSID/password.");
-            return;
-        }
+        // POST /save — save config, attempt pairing, restart
+        server_.on("/save", HTTP_POST, [this]() {
+            const String ssid        = server_.arg("ssid");
+            const String password    = server_.arg("password");
+            const String serverUrl   = server_.arg("server_url");
+            const String pairingCode = server_.arg("pairing_code");
 
-        // 3. Attempt device pairing
-        if (!pairDevice(serverUrl, pairingCode)) {
-            server_.send(502, "text/plain",
-                         "Wi-Fi OK but pairing failed. "
-                         "Check server URL and pairing code.");
-            return;
-        }
+            if (ssid.isEmpty() || serverUrl.isEmpty() || pairingCode.isEmpty()) {
+                server_.send(400, "text/plain",
+                             "SSID, server URL and pairing code are required.");
+                return;
+            }
 
-        server_.send(200, "text/html",
-                     "<!doctype html><html><body>"
-                     "<h2>Paired successfully!</h2>"
-                     "<p>Device will restart in 2 seconds.</p>"
-                     "</body></html>");
-        delay(2000);
-        ESP.restart();
-    });
+            // 1. Save Wi-Fi credentials
+            saveWifiConfig(ssid, password);
 
+            // 2. Connect to the network (keep AP alive with WIFI_AP_STA)
+            WiFi.begin(ssid.c_str(), password.c_str());
+            const unsigned long t0 = millis();
+            while (WiFi.status() != WL_CONNECTED && millis() - t0 < 10000) {
+                server_.handleClient();  // keep AP alive during connect wait
+                delay(100);
+            }
+
+            if (WiFi.status() != WL_CONNECTED) {
+                server_.send(502, "text/plain",
+                             "Could not connect to Wi-Fi. Check SSID/password.");
+                return;
+            }
+
+            // 3. Attempt device pairing
+            if (!pairDevice(serverUrl, pairingCode)) {
+                server_.send(502, "text/plain",
+                             "Wi-Fi OK but pairing failed. "
+                             "Check server URL and pairing code.");
+                return;
+            }
+
+            server_.send(200, "text/html",
+                         "<!doctype html><html><body>"
+                         "<h2>Paired successfully!</h2>"
+                         "<p>Device will restart in 2 seconds.</p>"
+                         "</body></html>");
+            delay(2000);
+            ESP.restart();
+        });
+
+        // Catch-all: any unrecognised path → redirect to setup form
+        server_.onNotFound([this]() {
+            server_.sendHeader("Location", "http://192.168.4.1/", true);
+            server_.send(302, "text/plain", "");
+        });
+
+    }
+    dns_server_.start(53, "*", WiFi.softAPIP());
     server_.begin();
 }
 

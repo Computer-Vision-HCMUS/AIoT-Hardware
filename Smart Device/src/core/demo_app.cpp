@@ -27,6 +27,7 @@
 #include "screens/companion_chat_screen.h"
 #include "screens/insights_screen.h"
 #include "screens/mic_test_screen.h"
+#include "screens/wifi_screen.h"
 
 #include <Arduino.h>
 #include <esp_timer.h>
@@ -86,13 +87,6 @@ bool DemoApp::init() {
         serviceConfigureEdgeApi(edge_api_);
     }
 
-    network_ = new NetworkManager();
-    if (network_) {
-        network_->begin();
-        edge_api_ = new EdgeApiClient(*network_);
-        serviceConfigureEdgeApi(edge_api_);
-    }
-
     // AudioManager: init I2S drivers.
     // Non-fatal if it fails (device may not have audio hardware yet).
     if (audio_) {
@@ -112,7 +106,11 @@ bool DemoApp::init() {
     app_state_.discoverIndex      = 0;
     app_state_.musicScrollIndex   = 0;
     app_state_.podcastScrollIndex = 0;
+    app_state_.supportActivityIndex = 0;
+    app_state_.supportShowingDetail = false;
+    app_state_.supportActivities.clear();
     app_state_.checkInAnalyzing   = true;
+    app_state_.wifiSetupMenuIndex = 0;
 
     app_state_.sharedContext.lastEmotion         = "Neutral";
     app_state_.sharedContext.confidence          = 0;
@@ -172,6 +170,7 @@ bool DemoApp::update() {
             case ScreenId::COMPANION_CHAT: target = DemoState::COMPANION_CHAT; break;
             case ScreenId::INSIGHTS:       target = DemoState::INSIGHTS;       break;
             case ScreenId::MIC_TEST:       target = DemoState::MIC_TEST;       break;
+            case ScreenId::WIFI_SETUP:     target = DemoState::WIFI_SETUP;     break;
         }
 
         DemoState current = target;
@@ -196,6 +195,23 @@ bool DemoApp::update() {
             if (current == DemoState::HOME) {
                 app_state_.checkInAnalyzing = true;
             }
+        }
+
+        // ── WiFi Setup: handle toggle sentinel ──
+        if (current == DemoState::WIFI_SETUP &&
+            app_state_.wifiSetupMenuIndex == 0xFF && network_) {
+            app_state_.wifiSetupMenuIndex = 0;  // clear sentinel
+
+            if (network_->isProvisioning()) {
+                // Currently in AP mode → toggle ON: connect to saved WiFi
+                Serial.println("[App] WiFi toggle ON: reconnecting to saved WiFi");
+                network_->reconnectWifi();
+            } else {
+                // Currently connected (or offline) → toggle OFF: go to AP mode
+                Serial.println("[App] WiFi toggle OFF: switching to AP provisioning");
+                network_->startProvisioningAp();
+            }
+            needs_redraw_ = true;
         }
 
         // ── Live updates without button press ──
@@ -245,6 +261,9 @@ bool DemoApp::update() {
                     break;
                 case DemoState::MIC_TEST:
                     ScreenHandlers::drawMicTestScreen(*display_, app_state_);
+                    break;
+                case DemoState::WIFI_SETUP:
+                    ScreenHandlers::drawWifiScreen(*display_, app_state_);
                     break;
                 case DemoState::ERROR_STATE:
                     DemoRendering::renderErrorScreen(*display_, "System Error!");
