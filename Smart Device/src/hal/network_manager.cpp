@@ -58,20 +58,7 @@ bool NetworkManager::begin() {
 
     if (!connectSavedNetwork()) {
         startProvisioningPortal();
-        return true;
     }
-
-#if defined(DEV_PAIRING_CODE) && defined(DEV_SERVER_URL)
-    // ── Dev auto-pair ───────────────────────────────────────────────────
-    // If we just connected but have no token yet, pair automatically.
-    if (!isPaired()) {
-        Serial.println("[Network] DEV override: auto-pairing...");
-        if (!pairDevice(DEV_SERVER_URL, DEV_PAIRING_CODE)) {
-            Serial.println("[Network] DEV auto-pair failed — running unpaired");
-        }
-    }
-#endif
-
     return true;  // offline UI stays usable
 }
 
@@ -261,22 +248,6 @@ void NetworkManager::loadConfig() {
     device_token_    = prefs.getString(kKeyDeviceToken, "");
     device_id_       = prefs.getString(kKeyDeviceId,    "");
     prefs.end();
-
-#if defined(DEV_SERVER_URL)
-    // ── Dev override: skip provisioning portal ──────────────────────────
-    // Set DEV_WIFI_SSID / DEV_WIFI_PASS / DEV_SERVER_URL / DEV_PAIRING_CODE
-    // in platformio.ini build_flags to connect + pair automatically.
-    if (server_base_url_.isEmpty()) {
-        Serial.println("[Network] DEV override: using hardcoded server URL");
-        server_base_url_ = DEV_SERVER_URL;
-    }
-    if (device_token_.isEmpty()) {
-        // Save credentials so connectSavedNetwork() can use them, then pair.
-#if defined(DEV_WIFI_SSID) && defined(DEV_WIFI_PASS)
-        saveWifiConfig(DEV_WIFI_SSID, DEV_WIFI_PASS);
-#endif
-    }
-#endif
 }
 
 void NetworkManager::saveWifiConfig(const String& ssid, const String& password) {
