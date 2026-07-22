@@ -75,6 +75,9 @@ struct AppState {
     uint8_t discoverIndex;    // 0=Music, 1=Podcast
     uint8_t musicScrollIndex;
     uint8_t podcastScrollIndex;
+    uint8_t supportActivityIndex;
+    bool    supportShowingDetail;
+    std::vector<ActivityCard> supportActivities;
 
     // Check-in sub-state
     bool    checkInAnalyzing; // true while showing "analyzing..." phase

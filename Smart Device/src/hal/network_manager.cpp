@@ -34,6 +34,9 @@ constexpr char kKeyDeviceId[]      = "device_id";
 
 constexpr char kApSsid[]           = "EmotiCare-Setup";
 constexpr char kApPassword[]       = "emotioncare";
+const IPAddress kApIp(192, 168, 4, 1);
+const IPAddress kApGateway(192, 168, 4, 1);
+const IPAddress kApSubnet(255, 255, 255, 0);
 constexpr char kDeviceName[]       = "EmotiCare-ESP32";
 constexpr char kFirmwareVersion[]  = "1.0.0";
 constexpr unsigned long kReconnectEveryMs = 15000;
@@ -67,6 +70,7 @@ void NetworkManager::update() {
         // Call handleClient multiple times to avoid browser timeouts
         // during long TFT render cycles in the main loop
         for (int i = 0; i < 5; i++) {
+            dns_server_.processNextRequest();
             server_.handleClient();
             delay(2);
         }
@@ -128,7 +132,11 @@ void NetworkManager::startProvisioningPortal() {
     delay(100);
     WiFi.mode(WIFI_AP_STA);  // dual mode: AP stays alive while connecting to STA
     delay(100);
-    WiFi.softAP(kApSsid, kApPassword);
+    if (!WiFi.softAPConfig(kApIp, kApGateway, kApSubnet) ||
+        !WiFi.softAP(kApSsid, kApPassword)) {
+        Serial.println("[Network] ERROR: failed to start setup AP");
+        return;
+    }
     delay(500);  // wait for AP to be fully ready before starting WebServer
 
     provisioning_ = true;
@@ -138,6 +146,13 @@ void NetworkManager::startProvisioningPortal() {
     // GET / — show provisioning form
     server_.on("/", HTTP_GET, [this]() {
         server_.send(200, "text/html", portalPage());
+    });
+
+    // Resolve every hostname to the AP, so Android/iOS captive-portal checks
+    // and mistyped paths land on the provisioning page.
+    server_.onNotFound([this]() {
+        server_.sendHeader("Location", "http://" + WiFi.softAPIP().toString() + "/");
+        server_.send(302, "text/plain", "Redirecting to EmotiCare Setup");
     });
 
     // POST /save — save config, attempt pairing, restart
@@ -187,6 +202,7 @@ void NetworkManager::startProvisioningPortal() {
         ESP.restart();
     });
 
+    dns_server_.start(53, "*", WiFi.softAPIP());
     server_.begin();
 }
 

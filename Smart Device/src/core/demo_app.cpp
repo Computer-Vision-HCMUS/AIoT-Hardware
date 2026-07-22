@@ -86,13 +86,6 @@ bool DemoApp::init() {
         serviceConfigureEdgeApi(edge_api_);
     }
 
-    network_ = new NetworkManager();
-    if (network_) {
-        network_->begin();
-        edge_api_ = new EdgeApiClient(*network_);
-        serviceConfigureEdgeApi(edge_api_);
-    }
-
     // AudioManager: init I2S drivers.
     // Non-fatal if it fails (device may not have audio hardware yet).
     if (audio_) {
@@ -112,6 +105,9 @@ bool DemoApp::init() {
     app_state_.discoverIndex      = 0;
     app_state_.musicScrollIndex   = 0;
     app_state_.podcastScrollIndex = 0;
+    app_state_.supportActivityIndex = 0;
+    app_state_.supportShowingDetail = false;
+    app_state_.supportActivities.clear();
     app_state_.checkInAnalyzing   = true;
 
     app_state_.sharedContext.lastEmotion         = "Neutral";

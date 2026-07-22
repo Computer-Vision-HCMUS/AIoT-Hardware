@@ -29,6 +29,7 @@ EmotionResult runEmotionDetection();
 
 // ── UC1 — Activity Recommendation ────────────────────────────────────────
 ActivityCard getRecommendedActivity(const std::string& emotion);
+std::vector<ActivityCard> getRecommendedActivities(const std::string& emotion);
 
 // ── UC2/UC3 — Content ─────────────────────────────────────────────────────
 std::vector<Song>           getRecommendedMusic();

@@ -98,7 +98,11 @@ void handleCheckInInput(AppState& state, ButtonId button) {
         if (state.checkInAnalyzing) {
             state.checkInAnalyzing = false;  // reveal result
         } else {
-            // Already showing result → go to SUPPORT
+            // Load the server-provided activities once when entering Support.
+            state.supportActivities = getRecommendedActivities(
+                state.sharedContext.lastEmotion);
+            state.supportActivityIndex = 0;
+            state.supportShowingDetail = false;
             pushScreen(state, ScreenId::SUPPORT);
         }
     } else if (button == ButtonId::BACK) {
@@ -110,14 +114,33 @@ void handleCheckInInput(AppState& state, ButtonId button) {
 // SUPPORT — show recommended activity for the detected emotion
 //
 // Button map:
-//   ACTION(1) = back to HOME
-//   BACK(4)   = BACK (go back)
+//   ACTION(1) = open selected activity
+//   NEXT(3)   = next activity
+//   BACK(4)   = previous activity / leave detail
 // ---------------------------------------------------------------------------
 void handleSupportInput(AppState& state, ButtonId button) {
-    if (button == ButtonId::ACTION) {
+    const uint8_t count = static_cast<uint8_t>(state.supportActivities.size());
+
+    if (button == ButtonId::MODE) {
         resetToHome(state);
+    } else if (state.supportShowingDetail) {
+        if (button == ButtonId::ACTION || button == ButtonId::BACK) {
+            state.supportShowingDetail = false;
+        }
+    } else if (button == ButtonId::ACTION || button == ButtonId::START) {
+        if (count > 0) {
+            state.supportShowingDetail = true;
+        }
+    } else if (button == ButtonId::NEXT) {
+        if (state.supportActivityIndex + 1 < count) {
+            ++state.supportActivityIndex;
+        }
     } else if (button == ButtonId::BACK) {
-        goBack(state);
+        if (state.supportActivityIndex > 0) {
+            --state.supportActivityIndex;
+        } else {
+            goBack(state);
+        }
     }
 }
 

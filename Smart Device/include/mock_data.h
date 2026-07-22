@@ -19,6 +19,7 @@ struct EmotionResult {
 struct ActivityCard {
     std::string title;
     std::string description;
+    std::string actionId;  // Server identifier, e.g. "activity:breathing"
 };
 
 // ---------------------------------------------------------------------------

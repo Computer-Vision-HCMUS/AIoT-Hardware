@@ -2,6 +2,7 @@
 #define NETWORK_MANAGER_H
 
 #include <Arduino.h>
+#include <DNSServer.h>
 #include <WebServer.h>
 
 /**
@@ -67,6 +68,7 @@ private:
 
     // ── Internal state ────────────────────────────────────────────────────
     WebServer server_;
+    DNSServer dns_server_;
     String    server_base_url_;
     String    device_token_;
     String    device_id_;

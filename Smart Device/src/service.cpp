@@ -74,17 +74,23 @@ EmotionResult runEmotionDetection() {
 // TODO(ai-integration): pass real confidence value through from detection result
 // ─────────────────────────────────────────────────────────────────────────────
 ActivityCard getRecommendedActivity(const std::string& emotion) {
+    const std::vector<ActivityCard> activities = getRecommendedActivities(emotion);
+    return activities.empty() ? ActivityCard{} : activities.front();
+}
+
+std::vector<ActivityCard> getRecommendedActivities(const std::string& emotion) {
     delay(15);
 
-    ActivityCard card;
-
     if (g_edge_api && !g_last_session_id.isEmpty()) {
-        if (g_edge_api->getActivityRecommendation(g_last_session_id, card)) {
-            return card;
+        std::vector<ActivityCard> activities;
+        if (g_edge_api->getActivityRecommendations(g_last_session_id, activities)) {
+            return activities;
         }
     }
 
-    // MOCK FALLBACK — emotion-sensitive local responses
+    // MOCK FALLBACK — a list keeps Support usable when the server is unavailable.
+    std::vector<ActivityCard> activities;
+    ActivityCard card;
     if (emotion == "Anxious" || emotion == "stressed") {
         card.title       = "Box Breathing";
         card.description = "Breathe in 4 s, hold 4 s, breathe out 4 s, hold 4 s. Repeat 4 times.";
@@ -98,7 +104,8 @@ ActivityCard getRecommendedActivity(const std::string& emotion) {
         card.title       = "Breathing & Light Stretch";
         card.description = "Take 5 deep breaths, then do a 3-minute gentle stretch.";
     }
-    return card;
+    activities.push_back(card);
+    return activities;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
