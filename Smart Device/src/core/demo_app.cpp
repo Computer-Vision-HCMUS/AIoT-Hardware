@@ -270,6 +270,11 @@ bool DemoApp::update() {
                 Serial.println("[App] WiFi toggle OFF: switching to AP provisioning");
                 network_->startProvisioningAp();
             }
+
+            // Sync deviceStatus immediately after WiFi state change so the
+            // TFT render below reflects the new mode, not the stale value
+            // that was captured at the top of this update() call.
+            app_state_.sharedContext.deviceStatus = network_->statusLabel().c_str();
             needs_redraw_ = true;
         }
 
