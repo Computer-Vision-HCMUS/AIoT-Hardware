@@ -37,11 +37,14 @@ AIoT-Hardware/
     ├── platformio.ini          # Môi trường PlatformIO và thư viện
     ├── include/                # Header, cấu hình GPIO và interface
     ├── src/
+    │   ├── main.cpp            # Entry point Arduino chuẩn
+    │   ├── demo_main.cpp       # Demo façade
+    │   ├── navigation.cpp      # Điều hướng và AppState
+    │   ├── service.cpp         # Service API-first, mock fallback
     │   ├── core/               # Vòng đời ứng dụng và state machine
     │   ├── hal/                # Display, button, network và audio
     │   ├── screens/            # Các màn hình TFT
     │   ├── services/           # HTTP client tới AIoT Server
-    │   └── main.cpp            # Arduino setup() / loop()
     └── lib/                    # Thư viện PlatformIO cục bộ (nếu có)
 ```
 
@@ -129,10 +132,12 @@ DemoApp ── Navigation / AppState ── Screens
 - Bật log HTTP chi tiết bằng cách thêm `-DEDGE_API_DEBUG=1` vào `build_flags` trong [`platformio.ini`](./Smart%20Device/platformio.ini).
 - Không commit `.pio/`, firmware binary hoặc thông tin Wi-Fi/token. Các mục này đã được ignore.
 - Không có firmware unit-test target hiện tại. Xác minh thay đổi bằng `pio run`, serial monitor và kiểm tra trực tiếp trên thiết bị.
+- Xem [hardware verification guide](../AIoT-Server/docs/hardware/README.md) để kiểm tra thủ công theo use case và xác minh API.
 
 ## Giới hạn hiện tại
 
 - Emotion detection hiện dùng stub trong service layer; model SER và pipeline audio thực tế chưa được tích hợp hoàn chỉnh.
+- `include/classifier.h` là model SER được sinh sẵn nhưng chưa được firmware gọi.
 - Một số trải nghiệm AI (chat, recommendation, statistics) có fallback cục bộ khi không gọi được server.
 - Font GLCD tích hợp của TFT không hỗ trợ đầy đủ Unicode tiếng Việt; firmware chuyển chữ có dấu thành Latin không dấu để nội dung server vẫn đọc được.
 
