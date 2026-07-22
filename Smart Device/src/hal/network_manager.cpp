@@ -64,7 +64,12 @@ bool NetworkManager::begin() {
 
 void NetworkManager::update() {
     if (provisioning_) {
-        server_.handleClient();
+        // Call handleClient multiple times to avoid browser timeouts
+        // during long TFT render cycles in the main loop
+        for (int i = 0; i < 5; i++) {
+            server_.handleClient();
+            delay(2);
+        }
         return;
     }
     if (WiFi.status() != WL_CONNECTED &&
@@ -119,8 +124,13 @@ bool NetworkManager::connectSavedNetwork() {
 }
 
 void NetworkManager::startProvisioningPortal() {
-    WiFi.mode(WIFI_AP);
+    WiFi.disconnect(true);
+    delay(100);
+    WiFi.mode(WIFI_AP_STA);  // dual mode: AP stays alive while connecting to STA
+    delay(100);
     WiFi.softAP(kApSsid, kApPassword);
+    delay(500);  // wait for AP to be fully ready before starting WebServer
+
     provisioning_ = true;
     Serial.printf("[Network] Setup AP: %s  open http://%s\n",
                   kApSsid, WiFi.softAPIP().toString().c_str());
@@ -146,12 +156,12 @@ void NetworkManager::startProvisioningPortal() {
         // 1. Save Wi-Fi credentials first
         saveWifiConfig(ssid, password);
 
-        // 2. Connect to the network
-        WiFi.mode(WIFI_STA);
+        // 2. Connect to the network (keep AP alive with WIFI_AP_STA)
         WiFi.begin(ssid.c_str(), password.c_str());
         const unsigned long t0 = millis();
         while (WiFi.status() != WL_CONNECTED && millis() - t0 < 10000) {
-            delay(200);
+            server_.handleClient();  // keep AP alive during connect wait
+            delay(100);
         }
 
         if (WiFi.status() != WL_CONNECTED) {

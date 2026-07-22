@@ -37,6 +37,10 @@ bool demo_is_running() {
     return g_demo_app != nullptr && g_demo_app->isRunning();
 }
 
+bool demo_is_provisioning() {
+    return g_demo_app != nullptr && g_demo_app->isProvisioning();
+}
+
 void demo_stop() {
     if (g_demo_app) {
         g_demo_app->stop();

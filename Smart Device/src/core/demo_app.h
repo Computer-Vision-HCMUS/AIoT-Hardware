@@ -18,6 +18,7 @@ public:
     bool init();
     bool update();
     bool isRunning() const;
+    bool isProvisioning() const;
     void stop();
 
 private:

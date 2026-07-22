@@ -79,9 +79,13 @@ void setup() {
 void loop() {
   // Update demo (handles display rendering and button input)
   if (demo_update()) {
-    // Demo running normally
-    Serial.flush();  // Ensure debug logs are sent
-    delay(50);  // 1 second between updates for stability
+    Serial.flush();
+    // Run loop faster during provisioning so WebServer handles requests promptly
+    if (demo_is_provisioning()) {
+      delay(10);
+    } else {
+      delay(50);
+    }
   } else {
     // Demo error - restart
     Serial.println("ERROR: Demo update failed - restarting!");
