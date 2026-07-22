@@ -37,6 +37,11 @@
 #define EDGE_LOG(fmt, ...)
 #endif
 
+// Always-on diagnostic macro for critical statistics failures.
+// Unlike EDGE_LOG this is never compiled out — it fires regardless of EDGE_API_DEBUG
+// so failures are visible on the serial monitor without a special build.
+#define STATS_LOG(fmt, ...) Serial.printf("[Stats] " fmt "\n", ##__VA_ARGS__)
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Constructor
 // ─────────────────────────────────────────────────────────────────────────────
@@ -49,14 +54,17 @@ EdgeApiClient::EdgeApiClient(NetworkManager& network) : network_(network) {}
 
 bool EdgeApiClient::isReady() const {
     if (!network_.isConnected()) {
+        STATS_LOG("not connected — skip");
         EDGE_LOG("not connected — skip");
         return false;
     }
     if (!network_.isPaired()) {
+        STATS_LOG("not paired — skip");
         EDGE_LOG("not paired — skip");
         return false;
     }
     if (network_.serverBaseUrl().isEmpty()) {
+        STATS_LOG("server URL empty — skip");
         EDGE_LOG("server URL empty — skip");
         return false;
     }
@@ -113,6 +121,7 @@ bool EdgeApiClient::getJson(const char* path, String& response) {
         response = http.getString();
         EDGE_LOG("HTTP %d  resp=%s", status, response.c_str());
     } else {
+        STATS_LOG("HTTP error %d  path=%s", status, path);
         EDGE_LOG("HTTP error %d  path=%s", status, path);
     }
 
@@ -436,11 +445,16 @@ bool EdgeApiClient::getCompanionReply(const String& sessionId,
 //   {
 //     "period_type": "daily",
 //     "emotion_distribution": {
-//       "happy": 45, "calm": 0, "focused": 0,
-//       "stressed": 30, "sad": 15, "angry": 7, "tired": 3
+//       "happy": 0.45, "neutral": 0.30, "stressed": 0.15,
+//       "sad": 0.05, "angry": 0.03, "tired": 0.02
 //     },
 //     ...
 //   }
+//
+// NOTE: Values are decimals (0.0–1.0), NOT integer percentages.
+//       Multiply by 100 before storing into uint8_t fields.
+//       Server labels: happy, neutral, stressed, sad, angry, tired.
+//       "neutral" maps to both calmPct and focusedPct (no "focused" key exists).
 // ─────────────────────────────────────────────────────────────────────────────
 
 bool EdgeApiClient::getStatistics(const String& period,
@@ -458,16 +472,36 @@ bool EdgeApiClient::getStatistics(const String& period,
     if (!getJson(path.c_str(), response)) return false;
 
     JsonDocument json;
-    if (deserializeJson(json, response) != DeserializationError::Ok) return false;
+    if (deserializeJson(json, response) != DeserializationError::Ok) {
+        STATS_LOG("JSON parse failed for path=%s", path.c_str());
+        return false;
+    }
 
     JsonObject ed = json["emotion_distribution"].as<JsonObject>();
-    if (ed.isNull()) return false;
+    if (ed.isNull()) {
+        STATS_LOG("emotion_distribution key missing in response");
+        return false;
+    }
+    if (ed.size() == 0) {
+        STATS_LOG("emotion_distribution is empty — no sessions for this period, using mock");
+        return false;
+    }
 
     dist.period     = period.c_str();
-    dist.happyPct   = ed["happy"]    | 0;
-    dist.calmPct    = ed["neutral"]  | 0;   // server has no "calm" — use neutral
-    dist.focusedPct = ed["focused"]  | 0;
-    dist.sadPct     = ed["sad"]      | 0;
-    dist.anxiousPct = ed["stressed"] | 0;   // server uses "stressed" not "anxious"
+
+    // Server stores values as decimals 0.0–1.0 (e.g. {"happy": 0.45}).
+    // Multiply by 100 before casting to uint8_t to get correct percentages.
+    // Server keys: happy, neutral, stressed, sad, angry, tired.
+    // "neutral" covers both calm and focused display labels (no "focused" key exists).
+    dist.happyPct   = (uint8_t)(((float)(ed["happy"]    | 0.0f)) * 100.0f);
+    dist.calmPct    = (uint8_t)(((float)(ed["neutral"]  | 0.0f)) * 100.0f);
+    dist.focusedPct = (uint8_t)(((float)(ed["neutral"]  | 0.0f)) * 100.0f);
+    dist.sadPct     = (uint8_t)(((float)(ed["sad"]      | 0.0f)) * 100.0f);
+    dist.anxiousPct = (uint8_t)(((float)(ed["stressed"] | 0.0f)) * 100.0f);
+
+    EDGE_LOG("stats period=%s happy=%u calm=%u focused=%u sad=%u anxious=%u",
+             dist.period.c_str(),
+             dist.happyPct, dist.calmPct, dist.focusedPct,
+             dist.sadPct, dist.anxiousPct);
     return true;
 }
