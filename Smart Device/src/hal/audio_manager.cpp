@@ -20,6 +20,10 @@
 #include <driver/i2s.h>
 #include <driver/gpio.h>
 #include <Arduino.h>
+#include <Audio.h>
+#include <HTTPClient.h>
+#include <LittleFS.h>
+#include <WiFi.h>
 #include <cstring>
 
 // ---------------------------------------------------------------------------
@@ -30,6 +34,10 @@ static constexpr size_t   kDmaBufLen    = AUDIO_DMA_BUF_LEN;
 static constexpr int      kDmaBufCount  = AUDIO_DMA_BUF_COUNT;
 static constexpr uint32_t kTaskStackSz  = 4096;
 static constexpr UBaseType_t kTaskPrio  = 5;  // High priority for audio
+static constexpr char kMediaCachePath[] = "/media-cache.mp3";
+static constexpr size_t kTransferBufferSize = 2048;
+static constexpr size_t kMinPlayableBytes = 1024;
+static constexpr size_t kCacheSafetyMargin = 4096;
 
 // ---------------------------------------------------------------------------
 // Constructor
@@ -38,7 +46,9 @@ AudioManager::AudioManager()
     : initialized_(false),
       passthrough_active_(false),
       task_handle_(nullptr),
-      peak_level_(0) {}
+      peak_level_(0),
+      stream_audio_(nullptr),
+      stream_active_(false) {}
 
 // ---------------------------------------------------------------------------
 // init() — install I2S drivers for both ports
@@ -130,11 +140,185 @@ bool AudioManager::init() {
 // ---------------------------------------------------------------------------
 void AudioManager::deinit() {
     stopPassthrough();
+    stopStream();
     if (initialized_) {
         i2s_driver_uninstall(I2S_SPK_PORT);
         i2s_driver_uninstall(I2S_MIC_PORT);
         gpio_set_level((gpio_num_t)I2S_SPK_SD_PIN, 0);
         initialized_ = false;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Cached MP3 playback. Downloading completes before decoding begins, preventing
+// Wi-Fi receive work from starving I2S and causing the audible stutter seen
+// with direct HTTP decoding on the ESP32.
+// ---------------------------------------------------------------------------
+bool AudioManager::startStream(const std::string& url) {
+    if (url.empty()) {
+        Serial.println("[Audio] ERROR: media URL is empty");
+        return false;
+    }
+
+    stopStream();
+    stopPassthrough();
+
+    if (initialized_) {
+        i2s_driver_uninstall(I2S_SPK_PORT);
+        i2s_driver_uninstall(I2S_MIC_PORT);
+        gpio_set_level((gpio_num_t)I2S_SPK_SD_PIN, 0);
+        initialized_ = false;
+    }
+
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("[Audio] ERROR: WiFi unavailable");
+        init();
+        return false;
+    }
+
+    // This filesystem is used only as a disposable media cache. A failed mount
+    // (for example after an interrupted flash write) is therefore safe to
+    // repair by formatting it once before downloading the next track.
+    if (!LittleFS.begin(false)) {
+        Serial.println("[Audio] LittleFS mount failed; formatting media cache");
+        if (!LittleFS.format() || !LittleFS.begin(false)) {
+            Serial.println("[Audio] ERROR: LittleFS unavailable after format");
+            init();
+            return false;
+        }
+    }
+
+    // FILE_WRITE truncates the previous cache, releasing its space before we
+    // compute the maximum safe Range length for this download.
+    File cache = LittleFS.open(kMediaCachePath, FILE_WRITE);
+    if (!cache) {
+        Serial.println("[Audio] ERROR: cannot create media cache");
+        init();
+        return false;
+    }
+
+    HTTPClient http;
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    http.setTimeout(15000);
+    if (!http.begin(url.c_str())) {
+        Serial.printf("[Audio] ERROR: cannot open download URL: %s\n", url.c_str());
+        cache.close();
+        init();
+        return false;
+    }
+
+    const size_t freeBytes = LittleFS.totalBytes() - LittleFS.usedBytes();
+    if (freeBytes <= kCacheSafetyMargin) {
+        Serial.printf("[Audio] ERROR: media cache has only %u bytes free\n",
+                      static_cast<unsigned>(freeBytes));
+        cache.close();
+        http.end();
+        init();
+        return false;
+    }
+
+    // Always use one Range request. It returns the full file when it fits and
+    // a playable prefix otherwise; importantly, it avoids aborting a first
+    // full-file response, which resets the ESP32's next TCP connection.
+    const size_t maxCacheBytes = freeBytes - kCacheSafetyMargin;
+    http.addHeader("Range", "bytes=0-" + String(maxCacheBytes - 1));
+    const int status = http.GET();
+    const int contentLength = http.getSize();
+    const bool partialDownload = status == HTTP_CODE_PARTIAL_CONTENT &&
+                                 contentLength >= static_cast<int>(maxCacheBytes);
+
+    if (status != HTTP_CODE_OK && status != HTTP_CODE_PARTIAL_CONTENT) {
+        Serial.printf("[Audio] ERROR: media range request HTTP %d\n", status);
+        cache.close();
+        http.end();
+        init();
+        return false;
+    }
+    if (contentLength > 0 && static_cast<size_t>(contentLength) > maxCacheBytes) {
+        Serial.println("[Audio] ERROR: server ignored requested media range");
+        cache.close();
+        http.end();
+        init();
+        return false;
+    }
+
+    WiFiClient* input = http.getStreamPtr();
+    uint8_t transfer[kTransferBufferSize];
+    size_t downloaded = 0;
+    int remaining = contentLength;
+    while ((http.connected() || input->available()) &&
+           (remaining > 0 || contentLength == -1)) {
+        const size_t available = input->available();
+        if (available == 0) {
+            delay(1);
+            continue;
+        }
+        const size_t toRead = available < sizeof(transfer) ? available : sizeof(transfer);
+        const size_t read = input->readBytes(transfer, toRead);
+        if (read == 0 || cache.write(transfer, read) != read) break;
+        downloaded += read;
+        if (contentLength > 0) remaining -= static_cast<int>(read);
+    }
+    cache.close();
+    http.end();
+
+    if (downloaded < kMinPlayableBytes || (contentLength > 0 && remaining > 0)) {
+        Serial.printf("[Audio] ERROR: incomplete media download (%u bytes)\n",
+                      static_cast<unsigned>(downloaded));
+        LittleFS.remove(kMediaCachePath);
+        init();
+        return false;
+    }
+
+    stream_audio_ = new Audio();
+    if (!stream_audio_) {
+        Serial.println("[Audio] ERROR: unable to allocate stream decoder");
+        init();
+        return false;
+    }
+
+    stream_audio_->setPinout(I2S_SPK_BCLK_PIN, I2S_SPK_LRCLK_PIN, I2S_SPK_DOUT_PIN);
+    stream_audio_->setVolume(12);  // safe default for the MAX98357 amplifier
+    gpio_set_level((gpio_num_t)I2S_SPK_SD_PIN, 1);
+
+    if (!stream_audio_->connecttoFS(LittleFS, kMediaCachePath)) {
+        Serial.println("[Audio] ERROR: cannot decode cached media file");
+        delete stream_audio_;
+        stream_audio_ = nullptr;
+        gpio_set_level((gpio_num_t)I2S_SPK_SD_PIN, 0);
+        init();
+        return false;
+    }
+
+    stream_active_ = true;
+    Serial.printf("[Audio] playing cached media (%u bytes%s)\n",
+                  static_cast<unsigned>(downloaded),
+                  partialDownload ? ", prefix" : "");
+    return true;
+}
+
+void AudioManager::stopStream() {
+    if (stream_audio_) {
+        stream_audio_->stopSong();
+        delete stream_audio_;
+        stream_audio_ = nullptr;
+    }
+    stream_active_ = false;
+    gpio_set_level((gpio_num_t)I2S_SPK_SD_PIN, 0);
+
+    // The streaming library releases I2S0 with its object. Restore the normal
+    // mic-test drivers only when they were previously released for a stream.
+    if (!initialized_) init();
+}
+
+void AudioManager::update() {
+    if (!stream_audio_ || !stream_active_) return;
+
+    stream_audio_->loop();
+    if (!stream_audio_->isRunning()) {
+        stream_active_ = false;
+        gpio_set_level((gpio_num_t)I2S_SPK_SD_PIN, 0);
+        Serial.println("[Audio] stream finished");
     }
 }
 
@@ -194,6 +378,7 @@ void AudioManager::stopPassthrough() {
 // ---------------------------------------------------------------------------
 bool AudioManager::isActive()      const { return passthrough_active_; }
 uint16_t AudioManager::getPeakLevel() const { return peak_level_; }
+bool AudioManager::isStreaming() const { return stream_active_; }
 
 // ---------------------------------------------------------------------------
 // audioTask — static trampoline

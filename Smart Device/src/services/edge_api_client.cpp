@@ -305,6 +305,7 @@ void EdgeApiClient::parseMediaCards(const String& response,
         const String type    = card["media_type"]  | "";
         const String title   = card["title"]       | "";
         const String creator = card["creator"]     | "";
+        const String source  = card["source_url"]  | "";
         const int    durSec  = card["duration_sec"] | 0;
 
         // Convert duration_sec to "MM:SS" string
@@ -317,6 +318,7 @@ void EdgeApiClient::parseMediaCards(const String& response,
             s.artist          = creator.c_str();
             s.duration        = durStr;
             s.isAiRecommended = true;
+            s.sourceUrl       = source.c_str();
             songs.push_back(s);
         } else if (type == "podcast" && !title.isEmpty()) {
             PodcastEpisode ep;
@@ -324,6 +326,7 @@ void EdgeApiClient::parseMediaCards(const String& response,
             ep.creator         = creator.c_str();
             ep.duration        = durStr;
             ep.isAiRecommended = true;
+            ep.sourceUrl       = source.c_str();
             episodes.push_back(ep);
         }
     }

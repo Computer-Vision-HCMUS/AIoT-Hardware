@@ -119,6 +119,11 @@ bool DemoApp::init() {
     app_state_.sharedContext.insightsPeriodIndex = 0;
     app_state_.sharedContext.micPeakLevel        = 0;
     app_state_.sharedContext.audioActive         = false;
+    app_state_.sharedContext.mediaPlaying        = false;
+    app_state_.sharedContext.mediaPlayRequested  = false;
+    app_state_.sharedContext.mediaStopRequested  = false;
+    app_state_.sharedContext.mediaTitle.clear();
+    app_state_.sharedContext.mediaStatus.clear();
     app_state_.sharedContext.deviceStatus        = network_ ? network_->statusLabel().c_str() : "Offline";
 
     demo_running_ = true;
@@ -136,6 +141,18 @@ bool DemoApp::update() {
         app_state_.sharedContext.deviceStatus = network_->statusLabel().c_str();
     }
 
+    // Keep HTTP MP3 decoding non-blocking. The decoder consumes network data a
+    // little at a time, so navigation and screen rendering remain responsive.
+    if (audio_) {
+        const bool wasStreaming = audio_->isStreaming();
+        audio_->update();
+        app_state_.sharedContext.mediaPlaying = audio_->isStreaming();
+        if (wasStreaming && !app_state_.sharedContext.mediaPlaying) {
+            app_state_.sharedContext.mediaStatus = "Playback finished";
+            needs_redraw_ = true;
+        }
+    }
+
     // ── Button input ──
     if (buttons_) {
         buttons_->update();
@@ -151,6 +168,48 @@ bool DemoApp::update() {
 
         if (any) {
             handleButtonPress(app_state_, pressed);
+
+            if (app_state_.sharedContext.mediaStopRequested) {
+                app_state_.sharedContext.mediaStopRequested = false;
+                if (audio_) audio_->stopStream();
+                app_state_.sharedContext.mediaPlaying = false;
+                app_state_.sharedContext.mediaStatus = "Playback stopped";
+            }
+
+            if (app_state_.sharedContext.mediaPlayRequested) {
+                app_state_.sharedContext.mediaPlayRequested = false;
+
+                std::string title;
+                std::string url;
+                if (app_state_.currentScreen == ScreenId::MUSIC_LIST) {
+                    const auto songs = getRecommendedMusic();
+                    if (app_state_.musicScrollIndex < songs.size()) {
+                        const Song& selected = songs[app_state_.musicScrollIndex];
+                        title = selected.title;
+                        url = selected.sourceUrl;
+                    }
+                } else if (app_state_.currentScreen == ScreenId::PODCAST_LIST) {
+                    const auto episodes = getRecommendedPodcast();
+                    if (app_state_.podcastScrollIndex < episodes.size()) {
+                        const PodcastEpisode& selected = episodes[app_state_.podcastScrollIndex];
+                        title = selected.title;
+                        url = selected.sourceUrl;
+                    }
+                }
+
+                if (url.empty()) {
+                    app_state_.sharedContext.mediaStatus = "No stream URL from server";
+                    app_state_.sharedContext.mediaPlaying = false;
+                } else if (audio_ && audio_->startStream(url)) {
+                    app_state_.sharedContext.mediaTitle = title;
+                    app_state_.sharedContext.mediaStatus = "Playing: " + title;
+                    app_state_.sharedContext.mediaPlaying = true;
+                } else {
+                    app_state_.sharedContext.mediaStatus = "Cannot start stream";
+                    app_state_.sharedContext.mediaPlaying = false;
+                }
+            }
+
             needs_redraw_ = true;
             Serial.print("[App] Button -> Screen: ");
             Serial.println(screenIdToString(app_state_.currentScreen));

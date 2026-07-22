@@ -15,8 +15,11 @@
 #define AUDIO_MANAGER_H
 
 #include <cstdint>
+#include <string>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+
+class Audio;
 
 class AudioManager {
 public:
@@ -53,11 +56,29 @@ public:
      */
     uint16_t getPeakLevel() const;
 
+    /**
+     * Download an MP3 URL to LittleFS, then decode it locally to MAX98357.
+     * This intentionally avoids decoding while Wi-Fi is receiving data, which
+     * causes audible I2S underruns on the ESP32 hardware.
+     */
+    bool startStream(const std::string& url);
+
+    /** Stop the current remote stream and mute the speaker. */
+    void stopStream();
+
+    /** Must be called often from Arduino loop to decode the cached MP3. */
+    void update();
+
+    /** @return true while a remote media stream is being decoded. */
+    bool isStreaming() const;
+
 private:
     bool        initialized_;
     bool        passthrough_active_;
     TaskHandle_t task_handle_;
     volatile uint16_t peak_level_;
+    Audio* stream_audio_;
+    bool stream_active_;
 
     static void audioTask(void* arg);
     void        runAudioLoop();

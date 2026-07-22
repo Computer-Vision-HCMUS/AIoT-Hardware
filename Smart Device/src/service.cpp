@@ -129,14 +129,14 @@ std::vector<Song> getRecommendedMusic() {
 
     // MOCK FALLBACK
     return {
-        { "Calm Waves",        "Ambient Studio",   "3:45", true  },
-        { "Morning Dew",       "Nature Sounds",    "4:12", false },
-        { "Focused Mind",      "Lo-Fi Beats",      "5:01", true  },
-        { "Gentle Rain",       "Relax Collective", "3:33", false },
-        { "Soft Piano Dreams", "Luna Keys",        "4:55", false },
-        { "Tranquil River",    "Zen Music",        "6:02", false },
-        { "Light Breeze",      "Air Ensemble",     "3:28", false },
-        { "Soothing Strings",  "Calm Orchestra",   "5:17", false },
+        { "Calm Waves",        "Ambient Studio",   "3:45", true,  "" },
+        { "Morning Dew",       "Nature Sounds",    "4:12", false, "" },
+        { "Focused Mind",      "Lo-Fi Beats",      "5:01", true,  "" },
+        { "Gentle Rain",       "Relax Collective", "3:33", false, "" },
+        { "Soft Piano Dreams", "Luna Keys",        "4:55", false, "" },
+        { "Tranquil River",    "Zen Music",        "6:02", false, "" },
+        { "Light Breeze",      "Air Ensemble",     "3:28", false, "" },
+        { "Soothing Strings",  "Calm Orchestra",   "5:17", false, "" },
     };
 }
 
@@ -158,12 +158,12 @@ std::vector<PodcastEpisode> getRecommendedPodcast() {
 
     // MOCK FALLBACK
     return {
-        { "Mindfulness for Beginners", "Calm Daily",        "12:30", true  },
-        { "Managing Anxiety",          "Mind & Body Talks", "18:45", false },
-        { "Gratitude Journaling",      "Positive Space",    "10:15", true  },
-        { "Deep Sleep Techniques",     "Rest Easy Podcast", "22:00", false },
-        { "Finding Inner Peace",       "Serenity Now",      "15:30", false },
-        { "Overcoming Daily Stress",   "Wellness Weekly",   "19:20", false },
+        { "Mindfulness for Beginners", "Calm Daily",        "12:30", true,  "" },
+        { "Managing Anxiety",          "Mind & Body Talks", "18:45", false, "" },
+        { "Gratitude Journaling",      "Positive Space",    "10:15", true,  "" },
+        { "Deep Sleep Techniques",     "Rest Easy Podcast", "22:00", false, "" },
+        { "Finding Inner Peace",       "Serenity Now",      "15:30", false, "" },
+        { "Overcoming Daily Stress",   "Wellness Weekly",   "19:20", false, "" },
     };
 }
 

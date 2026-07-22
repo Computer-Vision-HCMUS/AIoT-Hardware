@@ -30,6 +30,7 @@ struct Song {
     std::string artist;
     std::string duration;       // e.g. "3:45"
     bool        isAiRecommended;
+    std::string sourceUrl;      // Direct HTTP(S) MP3 stream supplied by the server
 };
 
 // ---------------------------------------------------------------------------
@@ -40,6 +41,7 @@ struct PodcastEpisode {
     std::string creator;
     std::string duration;       // e.g. "12:30"
     bool        isAiRecommended;
+    std::string sourceUrl;      // Direct HTTP(S) MP3 stream supplied by the server
 };
 
 // ---------------------------------------------------------------------------

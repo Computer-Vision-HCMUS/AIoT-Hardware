@@ -6,8 +6,8 @@
  *
  * Button legend:
  *   MODE(1)   = BACK
- *   ACTION(2) = --
- *   START(3)  = --
+ *   ACTION(2) = PLAY selected HTTP MP3 stream
+ *   START(3)  = STOP current stream
  *   NEXT(4)   = DOWN
  *   BACK(5)   = UP / BACK
  */
@@ -85,10 +85,15 @@ void drawPodcastListScreen(DisplayController& display, const AppState& state) {
 
     UICommon::drawButtonLegend(display,
         /*S1*/ "BACK",
-        /*S2*/ "--",
-        /*S3*/ "--",
+        /*S2*/ "PLAY",
+        /*S3*/ "STOP",
         /*S4*/ "DOWN",
         /*S5*/ "UP/BCK");
+
+    if (!state.sharedContext.mediaStatus.empty()) {
+        UICommon::drawLabel(display, 4, display.getHeight() - 42,
+                            state.sharedContext.mediaStatus.c_str(), 1, 0, 220, 200);
+    }
 }
 
 }  // namespace ScreenHandlers
