@@ -31,6 +31,13 @@ public:
     /** Must be called every loop() iteration. */
     void update();
 
+    // ── WiFi mode control ─────────────────────────────────────────────────
+    /** Disconnect from WiFi and start AP provisioning portal. */
+    void startProvisioningAp();
+
+    /** Connect using saved NVS credentials (if any). */
+    bool reconnectWifi();
+
     // ── Status ────────────────────────────────────────────────────────────
     bool   isConnected()    const;
     bool   isProvisioning() const;
@@ -73,6 +80,7 @@ private:
     String    device_token_;
     String    device_id_;
     bool      provisioning_;
+    bool      portal_routes_registered_;
     unsigned long last_reconnect_attempt_ms_;
 };
 

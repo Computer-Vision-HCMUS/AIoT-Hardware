@@ -38,6 +38,7 @@ const char* DemoStateMachine::getStateName() const {
         case DemoState::COMPANION_CHAT: return "COMPANION_CHAT";
         case DemoState::INSIGHTS:       return "INSIGHTS";
         case DemoState::MIC_TEST:       return "MIC_TEST";
+        case DemoState::WIFI_SETUP:     return "WIFI_SETUP";
         case DemoState::ERROR_STATE:    return "ERROR";
         default:                        return "UNKNOWN";
     }

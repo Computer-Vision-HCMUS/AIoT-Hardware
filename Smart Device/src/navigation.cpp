@@ -48,6 +48,7 @@ void handleButtonPress(AppState& state, ButtonId button) {
             break;
         case ScreenId::INSIGHTS:       handleInsightsInput(state, button);      break;
         case ScreenId::MIC_TEST:       handleMicTestInput(state, button);       break;
+        case ScreenId::WIFI_SETUP:     handleWifiSetupInput(state, button);     break;
     }
 }
 
@@ -62,25 +63,26 @@ void handleButtonPress(AppState& state, ButtonId button) {
 //   MODE(0)   = unused on HOME
 // ---------------------------------------------------------------------------
 void handleHomeInput(AppState& state, ButtonId button) {
-    constexpr uint8_t kMenuItems = 5;  // Check-In, Discover, Chat, Insights, Test Mic
+    constexpr uint8_t kMenuItems = 6;  // Check-In, Discover, Chat, Insights, Test Mic, WiFi Setup
     if (button == ButtonId::NEXT) {
-        // Move cursor DOWN
         if (state.homeMenuIndex + 1 < kMenuItems) {
             state.homeMenuIndex++;
         }
     } else if (button == ButtonId::BACK) {
-        // Move cursor UP
         if (state.homeMenuIndex > 0) {
             state.homeMenuIndex--;
         }
     } else if (button == ButtonId::ACTION || button == ButtonId::START) {
-        // SELECT highlighted menu item
         switch (state.homeMenuIndex) {
             case 0: pushScreen(state, ScreenId::CHECK_IN);       break;
             case 1: pushScreen(state, ScreenId::DISCOVER);       break;
             case 2: pushScreen(state, ScreenId::COMPANION_CHAT); break;
             case 3: pushScreen(state, ScreenId::INSIGHTS);       break;
             case 4: pushScreen(state, ScreenId::MIC_TEST);       break;
+            case 5:
+                state.wifiSetupMenuIndex = 0;
+                pushScreen(state, ScreenId::WIFI_SETUP);
+                break;
         }
     }
 }
@@ -304,6 +306,22 @@ void handleMicTestInput(AppState& state, ButtonId button) {
 }
 
 // ---------------------------------------------------------------------------
+// WIFI_SETUP — single toggle: ON = connected WiFi, OFF = AP provisioning
+//
+// Button map:
+//   ACTION(1) = flip toggle (demo_app handles actual WiFi switching)
+//   BACK(4)   = return to previous screen
+// ---------------------------------------------------------------------------
+void handleWifiSetupInput(AppState& state, ButtonId button) {
+    if (button == ButtonId::ACTION || button == ButtonId::START) {
+        // 0xFF = sentinel: demo_app should execute the WiFi toggle
+        state.wifiSetupMenuIndex = 0xFF;
+    } else if (button == ButtonId::BACK) {
+        goBack(state);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Stack operations
 // ---------------------------------------------------------------------------
 void pushScreen(AppState& state, ScreenId nextScreen) {
@@ -344,6 +362,7 @@ const char* screenIdToString(ScreenId screen) {
         case ScreenId::COMPANION_CHAT: return "COMPANION_CHAT";
         case ScreenId::INSIGHTS:       return "INSIGHTS";
         case ScreenId::MIC_TEST:       return "MIC_TEST";
+        case ScreenId::WIFI_SETUP:     return "WIFI_SETUP";
         default:                       return "UNKNOWN";
     }
 }

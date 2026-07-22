@@ -75,12 +75,13 @@ void drawHomeScreen(DisplayController& display, const AppState& state) {
         "2. Discover",
         "3. Companion Chat",
         "4. Insights",
-        "5. Test Mic"
+        "5. Test Mic",
+        "6. WiFi Setup"
     };
-    constexpr uint8_t kCount = 5;
+    constexpr uint8_t kCount = 6;
 
     const uint16_t startY = 52;
-    const uint16_t itemH  = 28;   // 5 x 28 = 140px, ends at y=192, footer at y=250
+    const uint16_t itemH  = 24;   // 6 x 24 = 144px, ends at y=196, footer at y=250
     const uint16_t W      = display.getWidth();
 
     for (uint8_t i = 0; i < kCount; ++i) {

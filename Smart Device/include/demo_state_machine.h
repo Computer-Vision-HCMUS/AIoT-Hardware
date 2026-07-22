@@ -24,7 +24,8 @@ enum class DemoState : uint8_t {
     COMPANION_CHAT = 6,  ///< Voice conversation interface (UI simulation)
     INSIGHTS       = 7,  ///< Emotion statistics by time period
     MIC_TEST       = 8,  ///< Live audio passthrough: INMP441 → MAX98357
-    ERROR_STATE    = 9   ///< Fault / error fallback
+    WIFI_SETUP     = 9,  ///< WiFi mode toggle (connected ↔ AP provisioning)
+    ERROR_STATE    = 10  ///< Fault / error fallback
 };
 
 /**
