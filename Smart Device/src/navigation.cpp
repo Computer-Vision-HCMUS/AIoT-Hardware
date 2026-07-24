@@ -248,32 +248,53 @@ void handlePodcastListInput(AppState& state, ButtonId button) {
 //   BACK(4)   = return to HOME
 // ---------------------------------------------------------------------------
 void handleCompanionChatInput(AppState& state, ButtonId button, uint32_t nowMs) {
+    Serial.printf("[Companion] Button=%u recording=%d sending=%d\n",
+                  (unsigned)button, state.sharedContext.isRecording,
+                  state.sharedContext.companionSending);
+    if (state.sharedContext.companionSending) return;
+    // S3 is intentionally unused in the simplified Companion flow.
+    if (button == ButtonId::ACTION) return;
     if (button == ButtonId::MODE) {
         // RECORD — only start if not already recording
         if (!state.sharedContext.isRecording) {
-            state.sharedContext.isRecording      = true;
-            state.sharedContext.recordingStartMs = nowMs;
+            if (startAudioCapture(false)) {
+                state.sharedContext.isRecording = true;
+                state.sharedContext.recordingStartMs = nowMs;
+                state.sharedContext.companionStatus = "Recording...";
+            } else {
+                state.sharedContext.companionStatus = "Mic unavailable";
+            }
+        }
+    } else if (button == ButtonId::START) {
+        // Physical S2 (confirmed by Button=2 logs): stop and send.
+        if (!state.sharedContext.isRecording) {
+            state.sharedContext.companionStatus = "Press REC first";
+            return;
+        }
+        pauseAudioCapture();
+        state.sharedContext.isRecording = false;
+        state.sharedContext.companionSending = true;
+        state.sharedContext.companionStatus = "Thinking...";
+        if (!beginCompanionVoiceRequest()) {
+            state.sharedContext.companionSending = false;
+            state.sharedContext.companionStatus = "Cannot send recording";
         }
     } else if (button == ButtonId::ACTION) {
         // STOP — end recording session; add mock messages
         if (state.sharedContext.isRecording) {
+            pauseAudioCapture();
             state.sharedContext.isRecording = false;
-
-            // The audio HAL will supply a real transcript when the microphone
-            // is integrated; service calls already use the configured edge API.
-            ChatMessage userMsg;
-            userMsg.sender    = "user";
-            userMsg.text      = stopAudioCapture();
-            userMsg.timestamp = nowMs;
-            state.sharedContext.chatHistory.push_back(userMsg);
-
-            ChatMessage aiMsg;
-            aiMsg.sender    = "ai";
-            aiMsg.text      = getCompanionReply(userMsg.text);
-            aiMsg.timestamp = nowMs + 1;
-            state.sharedContext.chatHistory.push_back(aiMsg);
+        }
+        if (!state.sharedContext.isRecording) {
+            state.sharedContext.companionSending = true;
+            state.sharedContext.companionStatus = "Thinking...";
+            if (!beginCompanionVoiceRequest()) {
+                state.sharedContext.companionSending = false;
+                state.sharedContext.companionStatus = "Cannot send recording";
+            }
         }
     } else if (button == ButtonId::BACK) {
+        pauseAudioCapture();
         state.sharedContext.isRecording = false;
         goBack(state);
     }

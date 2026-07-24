@@ -126,6 +126,14 @@ public:
     bool getCompanionReply(const String& sessionId, const String& message,
                            String& reply);
 
+    /** Upload raw 16 kHz signed PCM and receive transcript, reply and audio URL. */
+    bool submitCompanionPcm(const String& sessionId, const char* pcmPath,
+                            String& transcript, String& reply, String& audioUrl);
+
+    /** Credentials for AudioManager's authenticated PCM GET request. */
+    String serverBaseUrl() const;
+    String deviceToken() const;
+
     // ── UC5 — Statistics ──────────────────────────────────────────────────
 
     /**

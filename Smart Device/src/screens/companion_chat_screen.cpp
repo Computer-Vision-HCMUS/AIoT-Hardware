@@ -74,10 +74,14 @@ void drawCompanionChatScreen(DisplayController& display, const AppState& state) 
     }
 
     // ---- Recording state indicator ----
-    if (ctx.isRecording) {
+    if (ctx.companionSending) {
+        UICommon::drawLabel(display, 8, 175, "Thinking... please wait", 1, 255, 190, 40);
+        UICommon::drawButtonLegend(display,
+            /*S1*/ "--", /*S2*/ "--", /*S3*/ "WAIT", /*S4*/ "--", /*S5*/ "WAIT");
+    } else if (ctx.isRecording) {
         uint32_t elapsed = (millis() - ctx.recordingStartMs) / 1000;
         char buf[32];
-        snprintf(buf, sizeof(buf), "REC  %02u s", elapsed);
+        snprintf(buf, sizeof(buf), "REC  %02u/20s", elapsed > 20 ? 20 : elapsed);
 
         // Red pulsing REC indicator bar
         display.setColor(180, 0, 0);
@@ -94,15 +98,17 @@ void drawCompanionChatScreen(DisplayController& display, const AppState& state) 
         }
 
         UICommon::drawButtonLegend(display,
-            /*S1*/ "REC..",
-            /*S2*/ "STOP",
+            /*S1*/ "--",
+            /*S2*/ "SEND",
             /*S3*/ "--",
             /*S4*/ "--",
-            /*S5*/ "BACK");
+            /*S5*/ "CANCEL");
     } else {
+        if (!ctx.companionStatus.empty())
+            UICommon::drawLabel(display, 8, 175, ctx.companionStatus, 1, 100, 200, 180);
         UICommon::drawButtonLegend(display,
             /*S1*/ "REC",
-            /*S2*/ "STOP",
+            /*S2*/ "--",
             /*S3*/ "--",
             /*S4*/ "--",
             /*S5*/ "BACK");

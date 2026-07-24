@@ -25,6 +25,7 @@
 
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
+#include <SPIFFS.h>
 #include "network_manager.h"
 
 #ifndef EDGE_API_DEBUG
@@ -436,6 +437,48 @@ bool EdgeApiClient::getCompanionReply(const String& sessionId,
     reply = json["card"]["body"] | "";
     return !reply.isEmpty();
 }
+
+bool EdgeApiClient::submitCompanionPcm(const String& sessionId, const char* pcmPath,
+                                       String& transcript, String& reply, String& audioUrl) {
+    if (!isReady() || sessionId.isEmpty() || pcmPath == nullptr) return false;
+    File pcm = SPIFFS.open(pcmPath, FILE_READ);
+    if (!pcm || pcm.size() == 0) {
+        Serial.println("[Companion] PCM recording missing or empty");
+        return false;
+    }
+
+    HTTPClient http;
+    const String url = network_.serverBaseUrl() + "/api/conversations/voice?session_id=" + sessionId + "&sample_rate=16000";
+    http.setTimeout(60000);  // Whisper + LLM + TTS may take longer than normal API calls.
+    if (!http.begin(url)) {
+        pcm.close();
+        return false;
+    }
+    http.addHeader("X-Device-Token", network_.deviceToken());
+    http.addHeader("Content-Type", "application/octet-stream");
+    http.addHeader("X-Audio-Format", "s16le");
+    Serial.printf("[Companion] Uploading %u PCM bytes\n", (unsigned)pcm.size());
+    const int status = http.sendRequest("POST", &pcm, pcm.size());
+    pcm.close();
+    if (status != HTTP_CODE_OK) {
+        Serial.printf("[Companion] Voice API HTTP %d: %s\n", status, http.getString().c_str());
+        http.end();
+        return false;
+    }
+
+    const String body = http.getString();
+    http.end();
+    JsonDocument json;
+    if (deserializeJson(json, body) != DeserializationError::Ok) return false;
+    transcript = json["transcript"] | "";
+    reply = json["reply_text"] | "";
+    audioUrl = json["audio_path"] | "";
+    if (!audioUrl.isEmpty() && audioUrl.startsWith("/")) audioUrl = network_.serverBaseUrl() + audioUrl;
+    return !transcript.isEmpty() && !reply.isEmpty();
+}
+
+String EdgeApiClient::serverBaseUrl() const { return network_.serverBaseUrl(); }
+String EdgeApiClient::deviceToken() const { return network_.deviceToken(); }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UC5 — Statistics

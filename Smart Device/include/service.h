@@ -20,9 +20,11 @@
 #include "mock_data.h"
 
 class EdgeApiClient;
+class AudioManager;
 
 // ── Provider configuration ────────────────────────────────────────────────
 void serviceConfigureEdgeApi(EdgeApiClient* client);
+void serviceConfigureAudioManager(AudioManager* audio);
 
 // ── UC1 — Emotion Detection ───────────────────────────────────────────────
 EmotionResult runEmotionDetection();
@@ -38,9 +40,11 @@ std::vector<PodcastEpisode> getRecommendedPodcast();
 // ── UC4 — Companion Chat ──────────────────────────────────────────────────
 std::string getCompanionReply(const std::string& userMessage);
 
-// TODO(ai-integration): replace with real I2S microphone HAL
-void        startAudioCapture();
-std::string stopAudioCapture();
+bool startAudioCapture(bool resume = false);
+void pauseAudioCapture();
+bool beginCompanionVoiceRequest();
+bool takeCompanionVoiceResult(std::string& transcript, std::string& reply,
+                              bool& success, bool& audioStarted);
 
 // ── UC5 — Insights / Statistics ───────────────────────────────────────────
 EmotionDistribution getStatisticsByPeriod(const std::string& period);

@@ -96,6 +96,7 @@ bool DemoApp::init() {
             audio_ = nullptr;
         }
     }
+    serviceConfigureAudioManager(audio_);
 
     // ── Initialise AppState ──
     app_state_.currentScreen  = ScreenId::HOME;
@@ -115,7 +116,9 @@ bool DemoApp::init() {
     app_state_.sharedContext.lastEmotion         = "Neutral";
     app_state_.sharedContext.confidence          = 0;
     app_state_.sharedContext.isRecording         = false;
+    app_state_.sharedContext.companionSending    = false;
     app_state_.sharedContext.recordingStartMs    = 0;
+    app_state_.sharedContext.companionStatus.clear();
     app_state_.sharedContext.insightsPeriodIndex = 0;
     app_state_.sharedContext.micPeakLevel        = 0;
     app_state_.sharedContext.audioActive         = false;
@@ -125,6 +128,7 @@ bool DemoApp::init() {
     app_state_.sharedContext.mediaTitle.clear();
     app_state_.sharedContext.mediaStatus.clear();
     app_state_.sharedContext.deviceStatus        = network_ ? network_->statusLabel().c_str() : "Offline";
+    last_companion_render_ms_ = 0;
 
     demo_running_ = true;
     return true;
@@ -147,6 +151,27 @@ bool DemoApp::update() {
         app_state_.sharedContext.mediaPlaying = audio_->isStreaming();
         if (wasStreaming && !app_state_.sharedContext.mediaPlaying) {
             app_state_.sharedContext.mediaStatus = "Playback finished";
+            needs_redraw_ = true;
+        }
+    }
+
+    // The long Whisper → LLM → TTS request runs in a dedicated FreeRTOS task;
+    // polling here keeps the TFT and buttons responsive while it is running.
+    if (app_state_.sharedContext.companionSending) {
+        std::string transcript;
+        std::string reply;
+        bool ok = false;
+        bool audioStarted = false;
+        if (takeCompanionVoiceResult(transcript, reply, ok, audioStarted)) {
+            app_state_.sharedContext.companionSending = false;
+            if (ok) {
+            const uint32_t now = millis();
+            app_state_.sharedContext.chatHistory.push_back({"user", transcript, now});
+            app_state_.sharedContext.chatHistory.push_back({"ai", reply, now + 1});
+            app_state_.sharedContext.companionStatus = audioStarted ? "Reply playing" : "Reply text only";
+            } else {
+                app_state_.sharedContext.companionStatus = "Voice request failed";
+            }
             needs_redraw_ = true;
         }
     }
@@ -299,7 +324,12 @@ bool DemoApp::update() {
         // COMPANION_CHAT: redraw while recording for live timer
         if (current == DemoState::COMPANION_CHAT &&
             app_state_.sharedContext.isRecording) {
-            needs_redraw_ = true;
+            // Full TFT redraw is expensive.  The timer needs only a 4 Hz update.
+            const uint32_t now = millis();
+            if (now - last_companion_render_ms_ >= 250) {
+                last_companion_render_ms_ = now;
+                needs_redraw_ = true;
+            }
         }
 
         // ── Render if state changed or input received ──
@@ -369,6 +399,7 @@ void DemoApp::stop() {
     }
     demo_running_ = false;
     serviceConfigureEdgeApi(nullptr);
+    serviceConfigureAudioManager(nullptr);
     if (edge_api_)      { delete edge_api_;      edge_api_      = nullptr; }
     if (network_)       { delete network_;       network_       = nullptr; }
     if (display_)       { delete display_;       display_       = nullptr; }

@@ -32,6 +32,7 @@ private:
     bool      demo_running_;
     uint64_t  boot_time_ms_;
     uint64_t  last_transition_ms_;
+    uint32_t  last_companion_render_ms_;
     DemoState last_rendered_state_;
     AppState  app_state_;
     bool      needs_redraw_;

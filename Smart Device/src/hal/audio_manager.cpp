@@ -7,9 +7,11 @@
 #include "pins_config.h"
 
 #include <Arduino.h>
+#include <cstring>
 #include <driver/gpio.h>
 #include <driver/i2s.h>
 #include <HTTPClient.h>
+#include <SPIFFS.h>
 #include <WiFi.h>
 
 namespace {
@@ -17,7 +19,16 @@ constexpr uint32_t kSampleRate = AUDIO_SAMPLE_RATE;
 constexpr size_t kDmaBufLen = AUDIO_DMA_BUF_LEN;
 constexpr int kDmaBufCount = AUDIO_DMA_BUF_COUNT;
 constexpr uint32_t kTaskStackSz = 4096;
+constexpr uint32_t kRecordingTaskStackSz = 8192;
+constexpr UBaseType_t kRecordingTaskPrio = 2;
 constexpr UBaseType_t kTaskPrio = 5;
+constexpr char kCompanionRecordingPath[] = "/companion.pcm";
+// Keep the recorder task stack small and predictable.  The I2S DMA buffers
+// already absorb timing jitter; a 128-sample conversion chunk is enough.
+constexpr size_t kRecordingChunkSamples = 128;
+constexpr size_t kRecordingWriteBatchBytes = 2048;
+// Keep below the board's SPIFFS capacity and the server's 30 s upload cap.
+constexpr size_t kMaxCompanionRecordingBytes = 20 * AUDIO_SAMPLE_RATE * sizeof(int16_t);
 }  // namespace
 
 AudioManager::AudioManager()
@@ -26,7 +37,10 @@ AudioManager::AudioManager()
       task_handle_(nullptr),
       peak_level_(0),
       stream_active_(false),
-      stream_task_handle_(nullptr) {}
+      stream_task_handle_(nullptr),
+      recording_active_(false),
+      recording_task_handle_(nullptr),
+      recording_bytes_(0) {}
 
 bool AudioManager::init() {
     if (initialized_) return true;
@@ -94,6 +108,7 @@ bool AudioManager::init() {
 
 void AudioManager::deinit() {
     stopStream();
+    stopRecording();
     stopPassthrough();
     if (initialized_) {
         i2s_driver_uninstall(I2S_SPK_PORT);
@@ -103,7 +118,7 @@ void AudioManager::deinit() {
     }
 }
 
-bool AudioManager::startStream(const std::string& url) {
+bool AudioManager::startStream(const std::string& url, const std::string& deviceToken) {
     if (url.empty()) return false;
 
     stopStream();
@@ -114,6 +129,8 @@ bool AudioManager::startStream(const std::string& url) {
     if (WiFi.status() != WL_CONNECTED) return false;
 
     stream_url_ = url + (url.find('?') == std::string::npos ? "?format=pcm" : "&format=pcm");
+    stream_device_token_ = deviceToken;
+    Serial.printf("[Audio] Starting PCM stream: %s\n", stream_url_.c_str());
     gpio_set_level((gpio_num_t)I2S_SPK_SD_PIN, 1);
     i2s_zero_dma_buffer(I2S_SPK_PORT);
     stream_active_ = true;
@@ -160,6 +177,7 @@ void AudioManager::runStreamLoop() {
         vTaskDelete(nullptr);
         return;
     }
+    if (!stream_device_token_.empty()) http.addHeader("X-Device-Token", stream_device_token_.c_str());
 
     const int status = http.GET();
     if (status != HTTP_CODE_OK) {
@@ -171,8 +189,11 @@ void AudioManager::runStreamLoop() {
         return;
     }
 
+    Serial.printf("[Audio] PCM stream connected: %d bytes\n", http.getSize());
+
     WiFiClient* input = http.getStreamPtr();
     uint8_t buffer[1024];
+    size_t totalBytes = 0;
     while (stream_active_ && (http.connected() || input->available())) {
         const size_t available = input->available();
         if (available == 0) {
@@ -184,12 +205,125 @@ void AudioManager::runStreamLoop() {
         if (bytesRead == 0) continue;
         size_t bytesWritten = 0;
         i2s_write(I2S_SPK_PORT, buffer, bytesRead, &bytesWritten, portMAX_DELAY);
+        totalBytes += bytesWritten;
     }
     http.end();
     stream_active_ = false;
     stream_task_handle_ = nullptr;
     i2s_zero_dma_buffer(I2S_SPK_PORT);
     gpio_set_level((gpio_num_t)I2S_SPK_SD_PIN, 0);
+    Serial.printf("[Audio] PCM stream finished: %u bytes written\n", (unsigned)totalBytes);
+    vTaskDelete(nullptr);
+}
+
+bool AudioManager::startRecording(bool append) {
+    if (!initialized_ || recording_active_) return false;
+    Serial.println("[Audio] Recorder: preparing");
+    stopStream();
+    stopPassthrough();
+    // This board's default PlatformIO partition is SPIFFS.  LittleFS mounted
+    // on that partition can panic in lfs_alloc during the first write.
+    Serial.println("[Audio] Recorder: mounting SPIFFS");
+    if (!SPIFFS.begin(true)) {
+        Serial.println("[Audio] SPIFFS mount failed");
+        return false;
+    }
+    if (!append) {
+        // FILE_WRITE truncates the old file.  Do not call SPIFFS.remove() here:
+        // deleting a large recording can trigger a long SPIFFS GC pause.
+        Serial.println("[Audio] Recorder: truncating prior PCM");
+        recording_bytes_ = 0;
+    }
+    File check = SPIFFS.open(kCompanionRecordingPath, append ? FILE_APPEND : FILE_WRITE);
+    if (!check && !append) {
+        // A previous large PCM file can leave the small SPIFFS partition full
+        // or fragmented.  Companion recordings are disposable cache; recover
+        // the filesystem rather than leaving REC permanently unusable.
+        Serial.println("[Audio] Recorder: SPIFFS full; formatting audio cache");
+        SPIFFS.format();
+        SPIFFS.end();
+        if (SPIFFS.begin(false)) check = SPIFFS.open(kCompanionRecordingPath, FILE_WRITE);
+    }
+    if (!check) {
+        Serial.println("[Audio] Recorder: cannot open PCM file");
+        return false;
+    }
+    check.close();
+    Serial.println("[Audio] Recorder: PCM file ready");
+    i2s_zero_dma_buffer(I2S_MIC_PORT);
+    recording_active_ = true;
+    Serial.printf("[Audio] Recording %s -> %s\n", append ? "resumed" : "started", kCompanionRecordingPath);
+    if (xTaskCreate(AudioManager::recordingTask, "chat_record", kRecordingTaskStackSz,
+                    this, kRecordingTaskPrio, &recording_task_handle_) != pdPASS) {
+        Serial.println("[Audio] Recorder: task create failed");
+        recording_active_ = false;
+        return false;
+    }
+    return true;
+}
+
+void AudioManager::pauseRecording() {
+    recording_active_ = false;
+    if (recording_task_handle_ != nullptr) {
+        vTaskDelay(pdMS_TO_TICKS(120));
+        if (recording_task_handle_ != nullptr) {
+            vTaskDelete(recording_task_handle_);
+            recording_task_handle_ = nullptr;
+        }
+    }
+}
+
+void AudioManager::stopRecording() { pauseRecording(); }
+bool AudioManager::isRecording() const { return recording_active_; }
+size_t AudioManager::recordedBytes() const { return recording_bytes_; }
+const char* AudioManager::recordingPath() const { return kCompanionRecordingPath; }
+
+void AudioManager::recordingTask(void* arg) { static_cast<AudioManager*>(arg)->runRecordingLoop(); }
+
+void AudioManager::runRecordingLoop() {
+    File output = SPIFFS.open(kCompanionRecordingPath, FILE_APPEND);
+    if (!output) {
+        recording_active_ = false;
+        recording_task_handle_ = nullptr;
+        vTaskDelete(nullptr);
+        return;
+    }
+    int32_t readBuf[kRecordingChunkSamples];
+    int16_t pcmBuf[kRecordingChunkSamples];
+    uint8_t writeBatch[kRecordingWriteBatchBytes];
+    size_t pendingBytes = 0;
+    while (recording_active_) {
+        size_t bytesRead = 0;
+        if (i2s_read(I2S_MIC_PORT, readBuf, sizeof(readBuf), &bytesRead,
+                     pdMS_TO_TICKS(100)) != ESP_OK || bytesRead == 0) continue;
+        const size_t samples = bytesRead / sizeof(int32_t);
+        for (size_t i = 0; i < samples; ++i) pcmBuf[i] = static_cast<int16_t>(readBuf[i] >> 16);
+        const size_t bytes = samples * sizeof(int16_t);
+        if (recording_bytes_ + pendingBytes + bytes > kMaxCompanionRecordingBytes) {
+            Serial.println("[Audio] Recording reached 20 second limit");
+            recording_active_ = false;
+            break;
+        }
+        memcpy(writeBatch + pendingBytes, pcmBuf, bytes);
+        pendingBytes += bytes;
+        if (pendingBytes < sizeof(writeBatch)) {
+            vTaskDelay(pdMS_TO_TICKS(1));
+            continue;
+        }
+        if (output.write(writeBatch, pendingBytes) != pendingBytes) {
+            Serial.println("[Audio] recording write failed");
+            recording_active_ = false;
+            break;
+        }
+        recording_bytes_ += pendingBytes;
+        pendingBytes = 0;
+        vTaskDelay(pdMS_TO_TICKS(1));
+    }
+    if (pendingBytes > 0 && output.write(writeBatch, pendingBytes) == pendingBytes)
+        recording_bytes_ += pendingBytes;
+    output.close();
+    Serial.printf("[Audio] Recording paused/stopped: %u bytes\n", (unsigned)recording_bytes_);
+    recording_task_handle_ = nullptr;
     vTaskDelete(nullptr);
 }
 

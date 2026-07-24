@@ -45,7 +45,9 @@ struct SharedContext {
 
     // COMPANION_CHAT state
     bool     isRecording;
+    bool     companionSending;
     uint32_t recordingStartMs;  // millis() when recording began
+    std::string companionStatus;
     std::vector<ChatMessage> chatHistory;
 
     // INSIGHTS state

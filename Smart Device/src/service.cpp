@@ -21,20 +21,73 @@
 
 #include "service.h"
 #include "edge_api_client.h"
+#include "hal/audio_manager.h"
 #include <Arduino.h>
 
 namespace {
 EdgeApiClient* g_edge_api = nullptr;
+AudioManager* g_audio_manager = nullptr;
+TaskHandle_t g_companion_voice_task = nullptr;
+volatile bool g_companion_voice_busy = false;
+volatile bool g_companion_voice_result_ready = false;
+volatile bool g_companion_voice_success = false;
+volatile bool g_companion_audio_started = false;
+std::string g_companion_transcript;
+std::string g_companion_reply;
 String         g_last_session_id;
 std::vector<Song> g_music_cache;
 std::vector<PodcastEpisode> g_podcast_cache;
 unsigned long g_music_cache_at_ms = 0;
 unsigned long g_podcast_cache_at_ms = 0;
 constexpr unsigned long kMediaCacheTtlMs = 60000;
+
+void companionVoiceTask(void*) {
+    String remoteTranscript;
+    String remoteReply;
+    String audioUrl;
+    bool ok = false;
+    bool audioStarted = false;
+    if (g_audio_manager != nullptr && g_edge_api != nullptr &&
+        g_audio_manager->recordedBytes() >= 3200) {
+        if (g_last_session_id.isEmpty()) {
+            Serial.println("[Companion] No check-in session; creating neutral session");
+            String sessionId;
+            if (g_edge_api->syncEmotionSession("neutral", 0.0f, sessionId)) {
+                g_last_session_id = sessionId;
+            } else {
+                Serial.println("[Companion] Could not create neutral session");
+            }
+        }
+        Serial.printf("[Companion] Sending recording (%u bytes)\n",
+                      (unsigned)g_audio_manager->recordedBytes());
+        ok = g_edge_api->submitCompanionPcm(g_last_session_id,
+                                             g_audio_manager->recordingPath(),
+                                             remoteTranscript, remoteReply, audioUrl);
+        if (ok && !audioUrl.isEmpty()) {
+            audioStarted = g_audio_manager->startStream(audioUrl.c_str(), g_edge_api->deviceToken().c_str());
+            if (!audioStarted)
+                Serial.println("[Companion] Reply text received but audio playback could not start");
+        } else if (ok) {
+            Serial.println("[Companion] Reply text received without TTS audio");
+        }
+    }
+    g_companion_transcript = remoteTranscript.c_str();
+    g_companion_reply = remoteReply.c_str();
+    g_companion_voice_success = ok;
+    g_companion_audio_started = audioStarted;
+    g_companion_voice_result_ready = true;
+    g_companion_voice_busy = false;
+    g_companion_voice_task = nullptr;
+    vTaskDelete(nullptr);
+}
 }
 
 void serviceConfigureEdgeApi(EdgeApiClient* client) {
     g_edge_api = client;
+}
+
+void serviceConfigureAudioManager(AudioManager* audio) {
+    g_audio_manager = audio;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -231,13 +284,43 @@ std::string getCompanionReply(const std::string& userMessage) {
 //
 // TODO(ai-integration): replace with real I2S microphone HAL + STT pipeline
 // ─────────────────────────────────────────────────────────────────────────────
-void startAudioCapture() {
-    // Recording state is managed in AppState.sharedContext.isRecording.
-    // No microphone, no audio encoding, no transmission in this phase.
+bool startAudioCapture(bool resume) {
+    return g_audio_manager != nullptr && g_audio_manager->startRecording(resume);
 }
 
-std::string stopAudioCapture() {
-    return "Hi AI, how are you?";  // mock transcript
+void pauseAudioCapture() {
+    if (g_audio_manager != nullptr) g_audio_manager->pauseRecording();
+}
+
+bool beginCompanionVoiceRequest() {
+    if (g_companion_voice_busy || g_audio_manager == nullptr || g_edge_api == nullptr ||
+        g_audio_manager->recordedBytes() < 3200) {
+        Serial.printf("[Companion] Cannot queue request: busy=%d audio=%d api=%d bytes=%u\n",
+                      g_companion_voice_busy, g_audio_manager != nullptr, g_edge_api != nullptr,
+                      g_audio_manager == nullptr ? 0U : (unsigned)g_audio_manager->recordedBytes());
+        return false;
+    }
+    g_companion_voice_result_ready = false;
+    g_companion_voice_busy = true;
+    if (xTaskCreate(companionVoiceTask, "companion_net", 10240, nullptr, 4,
+                    &g_companion_voice_task) != pdPASS) {
+        g_companion_voice_busy = false;
+        g_companion_voice_task = nullptr;
+        return false;
+    }
+    Serial.println("[Companion] Voice request queued");
+    return true;
+}
+
+bool takeCompanionVoiceResult(std::string& transcript, std::string& reply,
+                              bool& success, bool& audioStarted) {
+    if (!g_companion_voice_result_ready) return false;
+    transcript = g_companion_transcript;
+    reply = g_companion_reply;
+    success = g_companion_voice_success;
+    audioStarted = g_companion_audio_started;
+    g_companion_voice_result_ready = false;
+    return true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
