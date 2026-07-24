@@ -26,6 +26,11 @@
 namespace {
 EdgeApiClient* g_edge_api = nullptr;
 String         g_last_session_id;
+std::vector<Song> g_music_cache;
+std::vector<PodcastEpisode> g_podcast_cache;
+unsigned long g_music_cache_at_ms = 0;
+unsigned long g_podcast_cache_at_ms = 0;
+constexpr unsigned long kMediaCacheTtlMs = 60000;
 }
 
 void serviceConfigureEdgeApi(EdgeApiClient* client) {
@@ -111,24 +116,27 @@ std::vector<ActivityCard> getRecommendedActivities(const std::string& emotion) {
 // ─────────────────────────────────────────────────────────────────────────────
 // UC2/UC3 — getRecommendedMusic()
 //
-// Tries: EdgeApiClient::getMusicCatalog()
-// Falls back to: hardcoded 8-track list
+// Server supplies the recommendation catalog. Playback itself remains local,
+// so the ESP never downloads or streams an audio URL.
 //
 // TODO(ai-integration): use getContentRecommendations(currentEmotion) for the
 //   emotion-personalised shorter list shown on the Discover screen.
 // ─────────────────────────────────────────────────────────────────────────────
 std::vector<Song> getRecommendedMusic() {
-    delay(15);
+    if (!g_music_cache.empty() && millis() - g_music_cache_at_ms < kMediaCacheTtlMs) {
+        return g_music_cache;
+    }
 
     if (g_edge_api) {
         std::vector<Song> songs;
         if (g_edge_api->getMusicCatalog(songs) && !songs.empty()) {
-            return songs;
+            g_music_cache = songs;
+            g_music_cache_at_ms = millis();
+            return g_music_cache;
         }
     }
 
-    // MOCK FALLBACK
-    return {
+    g_music_cache = {
         { "Calm Waves",        "Ambient Studio",   "3:45", true,  "" },
         { "Morning Dew",       "Nature Sounds",    "4:12", false, "" },
         { "Focused Mind",      "Lo-Fi Beats",      "5:01", true,  "" },
@@ -138,26 +146,31 @@ std::vector<Song> getRecommendedMusic() {
         { "Light Breeze",      "Air Ensemble",     "3:28", false, "" },
         { "Soothing Strings",  "Calm Orchestra",   "5:17", false, "" },
     };
+    g_music_cache_at_ms = millis();
+    return g_music_cache;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UC2/UC3 — getRecommendedPodcast()
 //
-// Tries: EdgeApiClient::getPodcastCatalog()
-// Falls back to: hardcoded 6-episode list
+// Server supplies the recommendation catalog. Playback itself remains local,
+// so the ESP never downloads or streams an audio URL.
 // ─────────────────────────────────────────────────────────────────────────────
 std::vector<PodcastEpisode> getRecommendedPodcast() {
-    delay(15);
+    if (!g_podcast_cache.empty() && millis() - g_podcast_cache_at_ms < kMediaCacheTtlMs) {
+        return g_podcast_cache;
+    }
 
     if (g_edge_api) {
         std::vector<PodcastEpisode> episodes;
         if (g_edge_api->getPodcastCatalog(episodes) && !episodes.empty()) {
-            return episodes;
+            g_podcast_cache = episodes;
+            g_podcast_cache_at_ms = millis();
+            return g_podcast_cache;
         }
     }
 
-    // MOCK FALLBACK
-    return {
+    g_podcast_cache = {
         { "Mindfulness for Beginners", "Calm Daily",        "12:30", true,  "" },
         { "Managing Anxiety",          "Mind & Body Talks", "18:45", false, "" },
         { "Gratitude Journaling",      "Positive Space",    "10:15", true,  "" },
@@ -165,6 +178,8 @@ std::vector<PodcastEpisode> getRecommendedPodcast() {
         { "Finding Inner Peace",       "Serenity Now",      "15:30", false, "" },
         { "Overcoming Daily Stress",   "Wellness Weekly",   "19:20", false, "" },
     };
+    g_podcast_cache_at_ms = millis();
+    return g_podcast_cache;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

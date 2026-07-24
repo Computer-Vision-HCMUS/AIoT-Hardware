@@ -182,8 +182,8 @@ void handleDiscoverInput(AppState& state, ButtonId button) {
 //
 // Button map:
 //   MODE(0)   = BACK to DISCOVER
-//   ACTION(1) = play selected server stream
-//   START(2)  = stop current stream
+//   START(2)  = play selected server track (matches the physical S2 wiring)
+//   ACTION(1) = stop playback (matches the physical S3 wiring)
 //   NEXT(3)   = scroll DOWN
 //   BACK(4)   = scroll UP (or return to DISCOVER when at top)
 // ---------------------------------------------------------------------------
@@ -201,9 +201,9 @@ void handleMusicListInput(AppState& state, ButtonId button) {
         }
     } else if (button == ButtonId::MODE) {
         goBack(state);
-    } else if (button == ButtonId::ACTION) {
-        state.sharedContext.mediaPlayRequested = true;
     } else if (button == ButtonId::START) {
+        state.sharedContext.mediaPlayRequested = true;
+    } else if (button == ButtonId::ACTION) {
         state.sharedContext.mediaStopRequested = true;
     }
 }
@@ -213,8 +213,8 @@ void handleMusicListInput(AppState& state, ButtonId button) {
 //
 // Button map:
 //   MODE(0)   = BACK to DISCOVER
-//   ACTION(1) = play selected server stream
-//   START(2)  = stop current stream
+//   START(2)  = play selected server episode (matches the physical S2 wiring)
+//   ACTION(1) = stop playback (matches the physical S3 wiring)
 //   NEXT(3)   = scroll DOWN
 //   BACK(4)   = scroll UP (or return to DISCOVER when at top)
 // ---------------------------------------------------------------------------
@@ -232,9 +232,9 @@ void handlePodcastListInput(AppState& state, ButtonId button) {
         }
     } else if (button == ButtonId::MODE) {
         goBack(state);
-    } else if (button == ButtonId::ACTION) {
-        state.sharedContext.mediaPlayRequested = true;
     } else if (button == ButtonId::START) {
+        state.sharedContext.mediaPlayRequested = true;
+    } else if (button == ButtonId::ACTION) {
         state.sharedContext.mediaStopRequested = true;
     }
 }

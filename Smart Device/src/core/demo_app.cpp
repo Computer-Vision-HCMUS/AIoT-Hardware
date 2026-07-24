@@ -141,8 +141,6 @@ bool DemoApp::update() {
         app_state_.sharedContext.deviceStatus = network_->statusLabel().c_str();
     }
 
-    // Keep HTTP MP3 decoding non-blocking. The decoder consumes network data a
-    // little at a time, so navigation and screen rendering remain responsive.
     if (audio_) {
         const bool wasStreaming = audio_->isStreaming();
         audio_->update();
@@ -197,15 +195,15 @@ bool DemoApp::update() {
                     }
                 }
 
-                if (url.empty()) {
-                    app_state_.sharedContext.mediaStatus = "No stream URL from server";
+                if (title.empty() || url.empty()) {
+                    app_state_.sharedContext.mediaStatus = "No playable item from server";
                     app_state_.sharedContext.mediaPlaying = false;
                 } else if (audio_ && audio_->startStream(url)) {
                     app_state_.sharedContext.mediaTitle = title;
-                    app_state_.sharedContext.mediaStatus = "Playing: " + title;
+                    app_state_.sharedContext.mediaStatus = "Starting: " + title;
                     app_state_.sharedContext.mediaPlaying = true;
                 } else {
-                    app_state_.sharedContext.mediaStatus = "Cannot start stream";
+                    app_state_.sharedContext.mediaStatus = "Audio output unavailable";
                     app_state_.sharedContext.mediaPlaying = false;
                 }
             }
@@ -239,6 +237,16 @@ bool DemoApp::update() {
 
         // ── Handle screen transitions for audio ──
         if (stateChanged) {
+            // Media lists always open in a predictable stopped state. Playback
+            // only starts after the user presses Play for a selected item.
+            if (current == DemoState::MUSIC_LIST || current == DemoState::PODCAST_LIST) {
+                if (audio_) audio_->stopStream();
+                app_state_.sharedContext.mediaPlaying = false;
+                app_state_.sharedContext.mediaPlayRequested = false;
+                app_state_.sharedContext.mediaStopRequested = false;
+                app_state_.sharedContext.mediaTitle.clear();
+                app_state_.sharedContext.mediaStatus = "Select an item, then press Play";
+            }
             // Leaving MIC_TEST → stop audio
             if (last_rendered_state_ == DemoState::MIC_TEST && audio_) {
                 audio_->stopPassthrough();

@@ -55,7 +55,7 @@ struct SharedContext {
     uint16_t micPeakLevel;   // 0–100, updated each frame by demo_app
     bool     audioActive;    // true while I2S passthrough task is running
 
-    // Remote media playback state (music/podcast HTTP stream)
+    // Server media playback state
     bool        mediaPlaying;
     bool        mediaPlayRequested;
     bool        mediaStopRequested;

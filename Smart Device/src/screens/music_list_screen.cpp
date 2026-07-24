@@ -6,8 +6,8 @@
  *
  * Button legend:
  *   MODE(1)   = BACK
- *   ACTION(2) = PLAY selected HTTP MP3 stream
- *   START(3)  = STOP current stream
+ *   S2 = PLAY selected server track
+ *   S3 = STOP playback
  *   NEXT(4)   = DOWN
  *   BACK(5)   = UP / BACK
  */
@@ -98,7 +98,10 @@ void drawMusicListScreen(DisplayController& display, const AppState& state) {
         /*S4*/ "DOWN",
         /*S5*/ "UP/BCK");
 
-    if (!state.sharedContext.mediaStatus.empty()) {
+    if (!state.sharedContext.mediaPlaying && state.sharedContext.mediaStatus.empty()) {
+        UICommon::drawLabel(display, 4, display.getHeight() - 42,
+                            "Stopped - choose a track and press PLAY", 1, 100, 130, 160);
+    } else if (!state.sharedContext.mediaStatus.empty()) {
         UICommon::drawLabel(display, 4, display.getHeight() - 42,
                             state.sharedContext.mediaStatus.c_str(), 1, 0, 220, 200);
     }
