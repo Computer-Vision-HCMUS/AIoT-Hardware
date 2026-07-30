@@ -203,7 +203,12 @@ bool EdgeApiClient::syncEmotionSession(const String& emotion, float confidence,
     // Map display labels → server emotion labels
     if      (label == "anxious")  label = "stressed";
     else if (label == "focused")  label = "neutral";
-    else if (label == "calm")     label = "neutral";
+    else if (label == "calm")     label = "calm";
+    // The embedded RAVDESS classifier has labels outside the cloud's strict
+    // EmotionLabel contract.  Normalise them before request validation.
+    else if (label == "fearful")  label = "fearful";
+    else if (label == "disgust")  label = "disgust";
+    else if (label == "surprised") label = "surprised";
 
     // Determine quality flag based on confidence
     const char* qualityFlag = (confidence >= 0.70f) ? "clean"
@@ -437,6 +442,8 @@ bool EdgeApiClient::getCompanionReply(const String& sessionId,
     reply = json["card"]["body"] | "";
     return !reply.isEmpty();
 }
+
+bool EdgeApiClient::canSync() const { return isReady(); }
 
 bool EdgeApiClient::submitCompanionPcm(const String& sessionId, const char* pcmPath,
                                        String& transcript, String& reply, String& audioUrl) {

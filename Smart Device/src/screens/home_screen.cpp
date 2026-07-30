@@ -76,9 +76,10 @@ void drawHomeScreen(DisplayController& display, const AppState& state) {
         "3. Companion Chat",
         "4. Insights",
         "5. Test Mic",
-        "6. WiFi Setup"
+        "6. Test Buttons",
+        "7. WiFi Setup"
     };
-    constexpr uint8_t kCount = 6;
+    constexpr uint8_t kCount = 7;
 
     const uint16_t startY = 52;
     const uint16_t itemH  = 24;   // 6 x 24 = 144px, ends at y=196, footer at y=250

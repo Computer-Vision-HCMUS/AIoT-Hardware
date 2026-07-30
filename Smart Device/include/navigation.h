@@ -12,6 +12,7 @@
 // ---------------------------------------------------------------------------
 enum class ScreenId : uint8_t {
     HOME           = 0,
+    BUTTON_TEST    = 10,
     CHECK_IN       = 1,
     SUPPORT        = 2,
     DISCOVER       = 3,
@@ -66,6 +67,9 @@ struct SharedContext {
 
     // Device status
     std::string deviceStatus;   // e.g. "Device Ready"
+    std::array<uint32_t, 5> buttonPressCounts;
+    std::array<bool, 5> buttonPressed;
+    uint8_t lastButtonId;
 };
 
 // ---------------------------------------------------------------------------
@@ -91,6 +95,17 @@ struct AppState {
 
     // Check-in sub-state
     bool    checkInAnalyzing; // true while showing "analyzing..." phase
+    bool    checkInRecording;
+    bool    checkInHasRecording;
+    bool    checkInProcessing;
+    bool    checkInInferencePending;
+    bool    checkInUncertain;
+    bool    checkInConfirmed;
+    uint32_t checkInProcessingStartMs;
+    uint32_t checkInRecordingStartMs;
+    std::string checkInStatus;
+    std::string checkInDetectedEmotion;
+    uint8_t checkInDetectedConfidence;
 
     // WiFi Setup sub-state
     uint8_t wifiSetupMenuIndex; // 0 = toggle mode, 1 = back
@@ -112,6 +127,7 @@ void handleCompanionChatInput(AppState& state, ButtonId button, uint32_t nowMs);
 void handleInsightsInput(AppState& state, ButtonId button);
 void handleMicTestInput(AppState& state, ButtonId button);
 void handleWifiSetupInput(AppState& state, ButtonId button);
+void handleButtonTestInput(AppState& state, ButtonId button);
 
 void pushScreen(AppState& state, ScreenId nextScreen);
 void goBack(AppState& state);

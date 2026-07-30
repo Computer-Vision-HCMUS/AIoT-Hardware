@@ -49,6 +49,7 @@ void handleButtonPress(AppState& state, ButtonId button) {
         case ScreenId::INSIGHTS:       handleInsightsInput(state, button);      break;
         case ScreenId::MIC_TEST:       handleMicTestInput(state, button);       break;
         case ScreenId::WIFI_SETUP:     handleWifiSetupInput(state, button);     break;
+        case ScreenId::BUTTON_TEST:    handleButtonTestInput(state, button);    break;
     }
 }
 
@@ -63,7 +64,7 @@ void handleButtonPress(AppState& state, ButtonId button) {
 //   MODE(0)   = unused on HOME
 // ---------------------------------------------------------------------------
 void handleHomeInput(AppState& state, ButtonId button) {
-    constexpr uint8_t kMenuItems = 6;  // Check-In, Discover, Chat, Insights, Test Mic, WiFi Setup
+    constexpr uint8_t kMenuItems = 7;
     if (button == ButtonId::NEXT) {
         if (state.homeMenuIndex + 1 < kMenuItems) {
             state.homeMenuIndex++;
@@ -80,6 +81,12 @@ void handleHomeInput(AppState& state, ButtonId button) {
             case 3: pushScreen(state, ScreenId::INSIGHTS);       break;
             case 4: pushScreen(state, ScreenId::MIC_TEST);       break;
             case 5:
+                state.sharedContext.buttonPressCounts.fill(0);
+                state.sharedContext.buttonPressed.fill(false);
+                state.sharedContext.lastButtonId = 0;
+                pushScreen(state, ScreenId::BUTTON_TEST);
+                break;
+            case 6:
                 state.wifiSetupMenuIndex = 0;
                 pushScreen(state, ScreenId::WIFI_SETUP);
                 break;
@@ -95,19 +102,57 @@ void handleHomeInput(AppState& state, ButtonId button) {
 //   BACK(4)   = cancel → HOME
 // ---------------------------------------------------------------------------
 void handleCheckInInput(AppState& state, ButtonId button) {
-    if (button == ButtonId::ACTION || button == ButtonId::START) {
-        // If still in analyzing phase, proceed to show result
-        if (state.checkInAnalyzing) {
-            state.checkInAnalyzing = false;  // reveal result
+    Serial.printf("[CheckIn] Button=%u recording=%d captured=%d processing=%d\n",
+                  static_cast<unsigned>(button), state.checkInRecording,
+                  state.checkInHasRecording, state.checkInProcessing);
+    if (state.checkInProcessing) return;
+    if (button == ButtonId::MODE && state.checkInAnalyzing && !state.checkInRecording) {
+        if (startAudioCapture(false)) {
+            state.checkInRecording = true;
+            state.checkInHasRecording = true;
+            state.checkInRecordingStartMs = millis();
+            state.checkInStatus = "Listening... speak naturally.";
         } else {
-            // Load the server-provided activities once when entering Support.
-            state.supportActivities = getRecommendedActivities(
-                state.sharedContext.lastEmotion);
-            state.supportActivityIndex = 0;
-            state.supportShowingDetail = false;
-            pushScreen(state, ScreenId::SUPPORT);
+            state.checkInStatus = "Microphone unavailable. Try again.";
         }
+    // Both physical S2 (ACTION) and S3 (START) execute local SER.
+    } else if ((button == ButtonId::ACTION || button == ButtonId::START) &&
+               state.checkInAnalyzing) {
+        if (!state.checkInHasRecording) {
+            state.checkInStatus = "Press REC before EXEC.";
+            return;
+        }
+        if (state.checkInRecording) pauseAudioCapture();
+        state.checkInRecording = false;
+        state.checkInStatus = "Processing on device...";
+        state.checkInProcessing = true;
+        state.checkInInferencePending = true;
+        state.checkInProcessingStartMs = millis();
+    } else if ((button == ButtonId::ACTION || button == ButtonId::START) &&
+               !state.checkInAnalyzing && !state.checkInConfirmed) {
+        bool synced = false;
+        if (confirmCheckInEmotion(state.checkInDetectedEmotion,
+                                  state.checkInDetectedConfidence, synced)) {
+            state.checkInConfirmed = true;
+            state.sharedContext.lastEmotion = state.checkInDetectedEmotion;
+            state.sharedContext.confidence = state.checkInDetectedConfidence;
+            state.checkInStatus = synced ? "Saved & synced. Press S2/S3."
+                                        : "Saved local. Press S2/S3.";
+        } else {
+            state.checkInStatus = "Save failed. Confirm again.";
+        }
+    } else if ((button == ButtonId::ACTION || button == ButtonId::START) &&
+               !state.checkInAnalyzing && state.checkInConfirmed) {
+        state.supportActivities = getRecommendedActivities(state.sharedContext.lastEmotion);
+        state.supportActivityIndex = 0;
+        state.supportShowingDetail = false;
+        pushScreen(state, ScreenId::SUPPORT);
     } else if (button == ButtonId::BACK) {
+        if (state.checkInRecording) {
+            pauseAudioCapture();
+            state.checkInRecording = false;
+        }
+        state.checkInHasRecording = false;
         goBack(state);
     }
 }
@@ -338,6 +383,10 @@ void handleMicTestInput(AppState& state, ButtonId button) {
     }
 }
 
+void handleButtonTestInput(AppState& state, ButtonId button) {
+    if (button == ButtonId::MODE) goBack(state);
+}
+
 // ---------------------------------------------------------------------------
 // WIFI_SETUP — single toggle: ON = connected WiFi, OFF = AP provisioning
 //
@@ -396,6 +445,7 @@ const char* screenIdToString(ScreenId screen) {
         case ScreenId::INSIGHTS:       return "INSIGHTS";
         case ScreenId::MIC_TEST:       return "MIC_TEST";
         case ScreenId::WIFI_SETUP:     return "WIFI_SETUP";
+        case ScreenId::BUTTON_TEST:    return "BUTTON_TEST";
         default:                       return "UNKNOWN";
     }
 }

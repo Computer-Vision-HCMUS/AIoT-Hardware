@@ -229,8 +229,9 @@ bool AudioManager::startRecording(bool append) {
         return false;
     }
     if (!append) {
-        // FILE_WRITE truncates the old file.  Do not call SPIFFS.remove() here:
-        // deleting a large recording can trigger a long SPIFFS GC pause.
+        // Every new capture must start with an empty PCM file.  FILE_WRITE is
+        // expected to truncate, but assert that behaviour and explicitly
+        // clean stale data if a filesystem implementation does not do so.
         Serial.println("[Audio] Recorder: truncating prior PCM");
         recording_bytes_ = 0;
     }
@@ -247,6 +248,17 @@ bool AudioManager::startRecording(bool append) {
     if (!check) {
         Serial.println("[Audio] Recorder: cannot open PCM file");
         return false;
+    }
+    if (!append && check.size() != 0) {
+        check.close();
+        Serial.println("[Audio] Recorder: stale PCM found; cleaning cache");
+        SPIFFS.remove(kCompanionRecordingPath);
+        check = SPIFFS.open(kCompanionRecordingPath, FILE_WRITE);
+        if (!check || check.size() != 0) {
+            if (check) check.close();
+            Serial.println("[Audio] Recorder: PCM cleanup failed");
+            return false;
+        }
     }
     check.close();
     Serial.println("[Audio] Recorder: PCM file ready");

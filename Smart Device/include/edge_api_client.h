@@ -54,6 +54,9 @@ public:
      */
     bool heartbeat();
 
+    /** True only when Wi-Fi is connected and this device has a token. */
+    bool canSync() const;
+
     // ── UC1 — Emotion check-in ────────────────────────────────────────────
 
     /**
