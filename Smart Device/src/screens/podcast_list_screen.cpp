@@ -6,8 +6,8 @@
  *
  * Button legend:
  *   MODE(1)   = BACK
- *   S2 = PLAY selected server episode
- *   S3 = STOP playback
+ *   S2 = STOP playback
+ *   S3 = PLAY selected server episode
  *   NEXT(4)   = DOWN
  *   BACK(5)   = UP / BACK
  */
@@ -15,9 +15,31 @@
 #include "screens/podcast_list_screen.h"
 #include "ui_common.h"
 #include "service.h"
+#include <cctype>
 #include <cstdio>
 
 namespace ScreenHandlers {
+
+namespace {
+std::string truncateForTft(const std::string& text, size_t maxBytes) {
+    if (text.size() <= maxBytes) return text;
+
+    size_t end = maxBytes > 3 ? maxBytes - 3 : 0;
+    while (end > 0 && (static_cast<unsigned char>(text[end]) & 0xC0) == 0x80) --end;
+    return text.substr(0, end) + "...";
+}
+
+std::string categoryLabel(const std::string& category) {
+    if (category.empty()) return "Podcast";
+
+    std::string label = category;
+    label[0] = static_cast<char>(toupper(static_cast<unsigned char>(label[0])));
+    for (char& ch : label) {
+        if (ch == '_') ch = ' ';
+    }
+    return label;
+}
+}  // namespace
 
 void drawPodcastListScreen(DisplayController& display, const AppState& state) {
     if (!display.isReady()) return;
@@ -25,7 +47,7 @@ void drawPodcastListScreen(DisplayController& display, const AppState& state) {
     const auto episodes = getRecommendedPodcast();
     const uint8_t total = (uint8_t)episodes.size();
 
-    UICommon::drawScreenFrame(display, "Podcast", "AI Recommendations");
+    UICommon::drawScreenFrame(display, "Podcast", "All episodes - AI marked");
 
     constexpr uint8_t kVisible = 4;
     const uint16_t startY = 50;
@@ -69,12 +91,12 @@ void drawPodcastListScreen(DisplayController& display, const AppState& state) {
                              selected ? 255 : 200);
         }
 
-        display.drawText(8, y + 5, ep.title, 1);
+        display.drawText(8, y + 5,
+                         truncateForTft(ep.title, ep.isAiRecommended ? 31 : 37), 1);
 
-        char buf[48];
-        snprintf(buf, sizeof(buf), "%s  %s", ep.creator.c_str(), ep.duration.c_str());
         display.setColor(100, 120, 145);
-        display.drawText(8, y + 21, buf, 1);
+        display.drawText(8, y + 21,
+                         truncateForTft(categoryLabel(ep.creator) + " | " + ep.duration, 37), 1);
     }
 
     if (total > 0) {
@@ -85,8 +107,8 @@ void drawPodcastListScreen(DisplayController& display, const AppState& state) {
 
     UICommon::drawButtonLegend(display,
         /*S1*/ "BACK",
-        /*S2*/ "PLAY",
-        /*S3*/ "STOP",
+        /*S2*/ "STOP",
+        /*S3*/ "PLAY",
         /*S4*/ "DOWN",
         /*S5*/ "UP/BCK");
 

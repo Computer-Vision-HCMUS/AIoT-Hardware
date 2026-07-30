@@ -227,15 +227,15 @@ void handleDiscoverInput(AppState& state, ButtonId button) {
 //
 // Button map:
 //   MODE(0)   = BACK to DISCOVER
-//   START(2)  = play selected server track (matches the physical S2 wiring)
-//   ACTION(1) = stop playback (matches the physical S3 wiring)
+//   START(2)  = play selected server track (physical S3)
+//   ACTION(1) = stop playback (physical S2)
 //   NEXT(3)   = scroll DOWN
 //   BACK(4)   = scroll UP (or return to DISCOVER when at top)
 // ---------------------------------------------------------------------------
 void handleMusicListInput(AppState& state, ButtonId button) {
-    constexpr uint8_t kMusicCount = 8;
+    const size_t musicCount = getRecommendedMusic().size();
     if (button == ButtonId::NEXT) {
-        if (state.musicScrollIndex + 1 < kMusicCount) {
+        if (state.musicScrollIndex + 1 < musicCount) {
             state.musicScrollIndex++;
         }
     } else if (button == ButtonId::BACK) {
@@ -258,15 +258,15 @@ void handleMusicListInput(AppState& state, ButtonId button) {
 //
 // Button map:
 //   MODE(0)   = BACK to DISCOVER
-//   START(2)  = play selected server episode (matches the physical S2 wiring)
-//   ACTION(1) = stop playback (matches the physical S3 wiring)
+//   START(2)  = play selected server episode (physical S3)
+//   ACTION(1) = stop playback (physical S2)
 //   NEXT(3)   = scroll DOWN
 //   BACK(4)   = scroll UP (or return to DISCOVER when at top)
 // ---------------------------------------------------------------------------
 void handlePodcastListInput(AppState& state, ButtonId button) {
-    constexpr uint8_t kPodcastCount = 6;
+    const size_t podcastCount = getRecommendedPodcast().size();
     if (button == ButtonId::NEXT) {
-        if (state.podcastScrollIndex + 1 < kPodcastCount) {
+        if (state.podcastScrollIndex + 1 < podcastCount) {
             state.podcastScrollIndex++;
         }
     } else if (button == ButtonId::BACK) {
@@ -297,32 +297,33 @@ void handleCompanionChatInput(AppState& state, ButtonId button, uint32_t nowMs) 
                   (unsigned)button, state.sharedContext.isRecording,
                   state.sharedContext.companionSending);
     if (state.sharedContext.companionSending) return;
-    // S3 is intentionally unused in the simplified Companion flow.
-    if (button == ButtonId::ACTION) return;
     if (button == ButtonId::MODE) {
         // RECORD — only start if not already recording
         if (!state.sharedContext.isRecording) {
             if (startAudioCapture(false)) {
                 state.sharedContext.isRecording = true;
+                state.sharedContext.companionRecordingReady = false;
                 state.sharedContext.recordingStartMs = nowMs;
                 state.sharedContext.companionStatus = "Recording...";
             } else {
                 state.sharedContext.companionStatus = "Mic unavailable";
             }
         }
-    } else if (button == ButtonId::START) {
-        // Physical S2 (confirmed by Button=2 logs): stop and send.
-        if (!state.sharedContext.isRecording) {
-            state.sharedContext.companionStatus = "Press REC first";
+    } else if (button == ButtonId::ACTION || button == ButtonId::START) {
+        // Sending is enabled only after the recorder has stopped at 10 seconds.
+        if (!state.sharedContext.companionRecordingReady) {
+            state.sharedContext.companionStatus = state.sharedContext.isRecording
+                ? "Recording - wait for 10s."
+                : "Press REC first";
             return;
         }
-        pauseAudioCapture();
-        state.sharedContext.isRecording = false;
         state.sharedContext.companionSending = true;
         state.sharedContext.companionStatus = "Thinking...";
         if (!beginCompanionVoiceRequest()) {
             state.sharedContext.companionSending = false;
             state.sharedContext.companionStatus = "Cannot send recording";
+        } else {
+            state.sharedContext.companionRecordingReady = false;
         }
     } else if (button == ButtonId::ACTION) {
         // STOP — end recording session; add mock messages
@@ -341,6 +342,7 @@ void handleCompanionChatInput(AppState& state, ButtonId button, uint32_t nowMs) 
     } else if (button == ButtonId::BACK) {
         pauseAudioCapture();
         state.sharedContext.isRecording = false;
+        state.sharedContext.companionRecordingReady = false;
         goBack(state);
     }
 }
@@ -355,10 +357,25 @@ void handleCompanionChatInput(AppState& state, ButtonId button, uint32_t nowMs) 
 // ---------------------------------------------------------------------------
 void handleInsightsInput(AppState& state, ButtonId button) {
     constexpr uint8_t kPeriods = 3;  // Day, Week, Month
-    if (button == ButtonId::ACTION || button == ButtonId::NEXT) {
+    if (button == ButtonId::MODE) {
+        if (state.sharedContext.insightsShowingAiAssessment) {
+            state.sharedContext.insightsShowingAiAssessment = false;
+            return;
+        }
+
+        static const char* kPeriodNames[] = {"Day", "Week", "Month"};
+        std::string assessment;
+        const char* period = kPeriodNames[state.sharedContext.insightsPeriodIndex % kPeriods];
+        if (!getStatisticsAiExplanation(period, assessment)) {
+            assessment = "AI assessment is unavailable. Check WiFi and server, then try again.";
+        }
+        state.sharedContext.insightsAiAssessment = assessment;
+        state.sharedContext.insightsShowingAiAssessment = true;
+    } else if (button == ButtonId::ACTION || button == ButtonId::NEXT) {
         // Move to next period
         state.sharedContext.insightsPeriodIndex =
             (state.sharedContext.insightsPeriodIndex + 1) % kPeriods;
+        state.sharedContext.insightsShowingAiAssessment = false;
     } else if (button == ButtonId::START) {
         // Move to previous period
         if (state.sharedContext.insightsPeriodIndex > 0) {
@@ -366,6 +383,7 @@ void handleInsightsInput(AppState& state, ButtonId button) {
         } else {
             state.sharedContext.insightsPeriodIndex = kPeriods - 1;
         }
+        state.sharedContext.insightsShowingAiAssessment = false;
     } else if (button == ButtonId::BACK) {
         goBack(state);
     }

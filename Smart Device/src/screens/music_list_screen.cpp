@@ -6,8 +6,8 @@
  *
  * Button legend:
  *   MODE(1)   = BACK
- *   S2 = PLAY selected server track
- *   S3 = STOP playback
+ *   S2 = STOP playback
+ *   S3 = PLAY selected server track
  *   NEXT(4)   = DOWN
  *   BACK(5)   = UP / BACK
  */
@@ -15,9 +15,31 @@
 #include "screens/music_list_screen.h"
 #include "ui_common.h"
 #include "service.h"
+#include <cctype>
 #include <cstdio>
 
 namespace ScreenHandlers {
+
+namespace {
+std::string truncateForTft(const std::string& text, size_t maxBytes) {
+    if (text.size() <= maxBytes) return text;
+
+    size_t end = maxBytes > 3 ? maxBytes - 3 : 0;
+    while (end > 0 && (static_cast<unsigned char>(text[end]) & 0xC0) == 0x80) --end;
+    return text.substr(0, end) + "...";
+}
+
+std::string categoryLabel(const std::string& category) {
+    if (category.empty()) return "Music";
+
+    std::string label = category;
+    label[0] = static_cast<char>(toupper(static_cast<unsigned char>(label[0])));
+    for (char& ch : label) {
+        if (ch == '_') ch = ' ';
+    }
+    return label;
+}
+}  // namespace
 
 void drawMusicListScreen(DisplayController& display, const AppState& state) {
     if (!display.isReady()) return;
@@ -25,7 +47,7 @@ void drawMusicListScreen(DisplayController& display, const AppState& state) {
     const auto songs = getRecommendedMusic();
     const uint8_t total = (uint8_t)songs.size();
 
-    UICommon::drawScreenFrame(display, "Music", "AI Recommendations");
+    UICommon::drawScreenFrame(display, "Music", "All tracks - AI marked");
 
     // Scroll window: show 4 items at a time
     constexpr uint8_t kVisible = 4;
@@ -75,13 +97,13 @@ void drawMusicListScreen(DisplayController& display, const AppState& state) {
         }
 
         // Song title
-        display.drawText(8, y + 5, song.title, 1);
+        display.drawText(8, y + 5,
+                         truncateForTft(song.title, song.isAiRecommended ? 31 : 37), 1);
 
         // Artist + duration (muted)
-        char buf[48];
-        snprintf(buf, sizeof(buf), "%s  %s", song.artist.c_str(), song.duration.c_str());
         display.setColor(100, 120, 145);
-        display.drawText(8, y + 21, buf, 1);
+        display.drawText(8, y + 21,
+                         truncateForTft(categoryLabel(song.artist) + " | " + song.duration, 37), 1);
     }
 
     // Scroll position indicator
@@ -93,8 +115,8 @@ void drawMusicListScreen(DisplayController& display, const AppState& state) {
 
     UICommon::drawButtonLegend(display,
         /*S1*/ "BACK",
-        /*S2*/ "PLAY",
-        /*S3*/ "STOP",
+        /*S2*/ "STOP",
+        /*S3*/ "PLAY",
         /*S4*/ "DOWN",
         /*S5*/ "UP/BCK");
 

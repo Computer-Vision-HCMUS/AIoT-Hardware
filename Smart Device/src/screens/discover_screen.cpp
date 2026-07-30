@@ -14,7 +14,9 @@
  */
 
 #include "screens/discover_screen.h"
+#include "service.h"
 #include "ui_common.h"
+#include <algorithm>
 #include <cstdio>
 
 namespace ScreenHandlers {
@@ -58,11 +60,19 @@ void drawDiscoverScreen(DisplayController& display, const AppState& state) {
     UICommon::drawDivider(display, 58);
 
     // ---- Menu: Music / Podcast ----
-    static const char* kItems[]    = { "Music", "Podcast" };
-    static const char* kSubDesc[]  = {
-        "8 AI-curated tracks",
-        "6 mindful episodes"
-    };
+    static const char* kItems[] = { "Music", "Podcast" };
+    const auto songs = getRecommendedMusic();
+    const auto episodes = getRecommendedPodcast();
+    const uint8_t musicAiCount = static_cast<uint8_t>(std::count_if(
+        songs.begin(), songs.end(), [](const Song& song) { return song.isAiRecommended; }));
+    const uint8_t podcastAiCount = static_cast<uint8_t>(std::count_if(
+        episodes.begin(), episodes.end(),
+        [](const PodcastEpisode& episode) { return episode.isAiRecommended; }));
+    char subDescriptions[2][48];
+    snprintf(subDescriptions[0], sizeof(subDescriptions[0]), "%u tracks | %u AI first",
+             static_cast<unsigned>(songs.size()), musicAiCount);
+    snprintf(subDescriptions[1], sizeof(subDescriptions[1]), "%u episodes | %u AI first",
+             static_cast<unsigned>(episodes.size()), podcastAiCount);
     constexpr uint8_t kCount = 2;
 
     const uint16_t startY = 63;
@@ -92,16 +102,16 @@ void drawDiscoverScreen(DisplayController& display, const AppState& state) {
             char subdesc[64];
             if (hasEmotion) {
                 snprintf(subdesc, sizeof(subdesc), "%s for %s",
-                         kSubDesc[i],
+                         subDescriptions[i],
                          state.sharedContext.lastEmotion.c_str());
             } else {
-                snprintf(subdesc, sizeof(subdesc), "%s (neutral default)", kSubDesc[i]);
+                snprintf(subdesc, sizeof(subdesc), "%s (neutral default)", subDescriptions[i]);
             }
             display.setColor(140, 200, 255);
             display.drawText(12, y + 26, subdesc, 1);
         } else {
             display.setColor(80, 95, 115);
-            display.drawText(12, y + 26, kSubDesc[i], 1);
+            display.drawText(12, y + 26, subDescriptions[i], 1);
         }
     }
 

@@ -127,10 +127,13 @@ bool DemoApp::init() {
     app_state_.sharedContext.lastEmotion         = "Neutral";
     app_state_.sharedContext.confidence          = 0;
     app_state_.sharedContext.isRecording         = false;
+    app_state_.sharedContext.companionRecordingReady = false;
     app_state_.sharedContext.companionSending    = false;
     app_state_.sharedContext.recordingStartMs    = 0;
     app_state_.sharedContext.companionStatus.clear();
     app_state_.sharedContext.insightsPeriodIndex = 0;
+    app_state_.sharedContext.insightsShowingAiAssessment = false;
+    app_state_.sharedContext.insightsAiAssessment.clear();
     app_state_.sharedContext.micPeakLevel        = 0;
     app_state_.sharedContext.audioActive         = false;
     app_state_.sharedContext.mediaPlaying        = false;
@@ -361,12 +364,19 @@ bool DemoApp::update() {
             needs_redraw_ = true;
         }
 
-        // COMPANION_CHAT: redraw while recording for live timer
+        // COMPANION_CHAT: end recording at 10 seconds. It remains available
+        // for the user to send explicitly with S2 or S3.
         if (current == DemoState::COMPANION_CHAT &&
             app_state_.sharedContext.isRecording) {
-            // Full TFT redraw is expensive.  The timer needs only a 4 Hz update.
             const uint32_t now = millis();
-            if (now - last_companion_render_ms_ >= 250) {
+            if (now - app_state_.sharedContext.recordingStartMs >= 10000) {
+                pauseAudioCapture();
+                app_state_.sharedContext.isRecording = false;
+                app_state_.sharedContext.companionRecordingReady = true;
+                app_state_.sharedContext.companionStatus = "10s recorded. Press S2/S3 to send.";
+                needs_redraw_ = true;
+            } else if (now - last_companion_render_ms_ >= 250) {
+                // Full TFT redraw is expensive. The timer needs only a 4 Hz update.
                 last_companion_render_ms_ = now;
                 needs_redraw_ = true;
             }

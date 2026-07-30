@@ -35,7 +35,6 @@
 namespace {
 EdgeApiClient* g_edge_api = nullptr;
 AudioManager* g_audio_manager = nullptr;
-TaskHandle_t g_companion_voice_task = nullptr;
 volatile bool g_companion_voice_busy = false;
 volatile bool g_companion_voice_result_ready = false;
 volatile bool g_companion_voice_success = false;
@@ -43,6 +42,7 @@ volatile bool g_companion_audio_started = false;
 std::string g_companion_transcript;
 std::string g_companion_reply;
 String         g_last_session_id;
+String         g_last_media_emotion = "neutral";
 std::vector<Song> g_music_cache;
 std::vector<PodcastEpisode> g_podcast_cache;
 unsigned long g_music_cache_at_ms = 0;
@@ -58,7 +58,7 @@ constexpr const char* kConfirmedEmotionPath = "/confirmed_emotion.json";
 aiot::ser::esp32::ExtractorWorkspace g_ser_workspace;
 
 
-void companionVoiceTask(void*) {
+void sendCompanionVoiceRequest() {
     String remoteTranscript;
     String remoteReply;
     String audioUrl;
@@ -94,8 +94,6 @@ void companionVoiceTask(void*) {
     g_companion_audio_started = audioStarted;
     g_companion_voice_result_ready = true;
     g_companion_voice_busy = false;
-    g_companion_voice_task = nullptr;
-    vTaskDelete(nullptr);
 }
 }
 
@@ -126,6 +124,8 @@ EmotionResult runEmotionDetection() {
     EmotionResult result;
     result.label      = "Happy";
     result.confidence = static_cast<uint8_t>(kConfidence * 100.0f);
+    g_last_media_emotion = result.label.c_str();
+    g_last_media_emotion.toLowerCase();
 
     if (g_edge_api) {
         String sessionId;
@@ -200,6 +200,20 @@ std::vector<Song> getRecommendedMusic() {
     if (g_edge_api) {
         std::vector<Song> songs;
         if (g_edge_api->getMusicCatalog(songs) && !songs.empty()) {
+            std::vector<Song> aiSongs;
+            std::vector<PodcastEpisode> ignoredEpisodes;
+            if (g_edge_api->getContentRecommendations(
+                    g_last_media_emotion, aiSongs, ignoredEpisodes)) {
+                for (Song& song : songs) {
+                    song.isAiRecommended = std::any_of(
+                        aiSongs.begin(), aiSongs.end(), [&song](const Song& candidate) {
+                            return candidate.mediaId == song.mediaId;
+                        });
+                }
+            }
+            std::stable_sort(songs.begin(), songs.end(), [](const Song& left, const Song& right) {
+                return left.isAiRecommended && !right.isAiRecommended;
+            });
             g_music_cache = songs;
             g_music_cache_at_ms = millis();
             return g_music_cache;
@@ -207,14 +221,14 @@ std::vector<Song> getRecommendedMusic() {
     }
 
     g_music_cache = {
-        { "Calm Waves",        "Ambient Studio",   "3:45", true,  "" },
-        { "Morning Dew",       "Nature Sounds",    "4:12", false, "" },
-        { "Focused Mind",      "Lo-Fi Beats",      "5:01", true,  "" },
-        { "Gentle Rain",       "Relax Collective", "3:33", false, "" },
-        { "Soft Piano Dreams", "Luna Keys",        "4:55", false, "" },
-        { "Tranquil River",    "Zen Music",        "6:02", false, "" },
-        { "Light Breeze",      "Air Ensemble",     "3:28", false, "" },
-        { "Soothing Strings",  "Calm Orchestra",   "5:17", false, "" },
+        { "", "Calm Waves",        "Ambient Studio",   "3:45", true,  "" },
+        { "", "Morning Dew",       "Nature Sounds",    "4:12", false, "" },
+        { "", "Focused Mind",      "Lo-Fi Beats",      "5:01", true,  "" },
+        { "", "Gentle Rain",       "Relax Collective", "3:33", false, "" },
+        { "", "Soft Piano Dreams", "Luna Keys",        "4:55", false, "" },
+        { "", "Tranquil River",    "Zen Music",        "6:02", false, "" },
+        { "", "Light Breeze",      "Air Ensemble",     "3:28", false, "" },
+        { "", "Soothing Strings",  "Calm Orchestra",   "5:17", false, "" },
     };
     g_music_cache_at_ms = millis();
     return g_music_cache;
@@ -234,6 +248,21 @@ std::vector<PodcastEpisode> getRecommendedPodcast() {
     if (g_edge_api) {
         std::vector<PodcastEpisode> episodes;
         if (g_edge_api->getPodcastCatalog(episodes) && !episodes.empty()) {
+            std::vector<Song> ignoredSongs;
+            std::vector<PodcastEpisode> aiEpisodes;
+            if (g_edge_api->getContentRecommendations(
+                    g_last_media_emotion, ignoredSongs, aiEpisodes)) {
+                for (PodcastEpisode& episode : episodes) {
+                    episode.isAiRecommended = std::any_of(
+                        aiEpisodes.begin(), aiEpisodes.end(), [&episode](const PodcastEpisode& candidate) {
+                            return candidate.mediaId == episode.mediaId;
+                        });
+                }
+            }
+            std::stable_sort(episodes.begin(), episodes.end(),
+                             [](const PodcastEpisode& left, const PodcastEpisode& right) {
+                return left.isAiRecommended && !right.isAiRecommended;
+            });
             g_podcast_cache = episodes;
             g_podcast_cache_at_ms = millis();
             return g_podcast_cache;
@@ -241,12 +270,12 @@ std::vector<PodcastEpisode> getRecommendedPodcast() {
     }
 
     g_podcast_cache = {
-        { "Mindfulness for Beginners", "Calm Daily",        "12:30", true,  "" },
-        { "Managing Anxiety",          "Mind & Body Talks", "18:45", false, "" },
-        { "Gratitude Journaling",      "Positive Space",    "10:15", true,  "" },
-        { "Deep Sleep Techniques",     "Rest Easy Podcast", "22:00", false, "" },
-        { "Finding Inner Peace",       "Serenity Now",      "15:30", false, "" },
-        { "Overcoming Daily Stress",   "Wellness Weekly",   "19:20", false, "" },
+        { "", "Mindfulness for Beginners", "Calm Daily",        "12:30", true,  "" },
+        { "", "Managing Anxiety",          "Mind & Body Talks", "18:45", false, "" },
+        { "", "Gratitude Journaling",      "Positive Space",    "10:15", true,  "" },
+        { "", "Deep Sleep Techniques",     "Rest Easy Podcast", "22:00", false, "" },
+        { "", "Finding Inner Peace",       "Serenity Now",      "15:30", false, "" },
+        { "", "Overcoming Daily Stress",   "Wellness Weekly",   "19:20", false, "" },
     };
     g_podcast_cache_at_ms = millis();
     return g_podcast_cache;
@@ -421,13 +450,9 @@ bool beginCompanionVoiceRequest() {
     }
     g_companion_voice_result_ready = false;
     g_companion_voice_busy = true;
-    if (xTaskCreate(companionVoiceTask, "companion_net", 10240, nullptr, 4,
-                    &g_companion_voice_task) != pdPASS) {
-        g_companion_voice_busy = false;
-        g_companion_voice_task = nullptr;
-        return false;
-    }
-    Serial.println("[Companion] Voice request queued");
+    // Deliberately synchronous: after SEND the app waits for the complete
+    // STT/LLM/TTS result instead of running a separate network task.
+    sendCompanionVoiceRequest();
     return true;
 }
 
@@ -467,15 +492,21 @@ EmotionDistribution getStatisticsByPeriod(const std::string& period) {
     dist.period = period;
 
     if (period == "Day") {
-        dist.happyPct   = 60; dist.calmPct    = 25; dist.focusedPct = 10;
-        dist.sadPct     =  3; dist.anxiousPct =  2;
+        dist.angryPct = 4; dist.calmPct = 22; dist.disgustPct = 2; dist.fearfulPct = 5;
+        dist.happyPct = 42; dist.neutralPct = 16; dist.sadPct = 6; dist.surprisedPct = 3;
     } else if (period == "Week") {
-        dist.happyPct   = 45; dist.calmPct    = 30; dist.focusedPct = 15;
-        dist.sadPct     =  7; dist.anxiousPct =  3;
+        dist.angryPct = 7; dist.calmPct = 18; dist.disgustPct = 3; dist.fearfulPct = 8;
+        dist.happyPct = 34; dist.neutralPct = 18; dist.sadPct = 9; dist.surprisedPct = 3;
     } else {
         // Month
-        dist.happyPct   = 50; dist.calmPct    = 28; dist.focusedPct = 12;
-        dist.sadPct     =  6; dist.anxiousPct =  4;
+        dist.angryPct = 5; dist.calmPct = 20; dist.disgustPct = 3; dist.fearfulPct = 7;
+        dist.happyPct = 38; dist.neutralPct = 17; dist.sadPct = 7; dist.surprisedPct = 3;
     }
     return dist;
+}
+
+bool getStatisticsAiExplanation(const std::string& period, std::string& explanation) {
+    explanation.clear();
+    if (!g_edge_api) return false;
+    return g_edge_api->getStatisticsExplanation(String(period.c_str()), explanation);
 }

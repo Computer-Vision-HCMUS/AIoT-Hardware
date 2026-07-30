@@ -147,6 +147,9 @@ public:
      */
     bool getStatistics(const String& period, EmotionDistribution& dist);
 
+    /** Request the cloud AI's plain-language assessment for a statistics period. */
+    bool getStatisticsExplanation(const String& period, std::string& explanation);
+
 private:
     // ── HTTP helpers ──────────────────────────────────────────────────────
 
@@ -163,6 +166,9 @@ private:
     void parseMediaCards(const String& response,
                          std::vector<Song>& songs,
                          std::vector<PodcastEpisode>& episodes);
+    void parseMediaLibrary(const String& response,
+                           std::vector<Song>& songs,
+                           std::vector<PodcastEpisode>& episodes);
 
     NetworkManager& network_;
 

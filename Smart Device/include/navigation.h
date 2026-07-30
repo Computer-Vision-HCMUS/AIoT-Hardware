@@ -46,6 +46,7 @@ struct SharedContext {
 
     // COMPANION_CHAT state
     bool     isRecording;
+    bool     companionRecordingReady;
     bool     companionSending;
     uint32_t recordingStartMs;  // millis() when recording began
     std::string companionStatus;
@@ -53,6 +54,8 @@ struct SharedContext {
 
     // INSIGHTS state
     uint8_t insightsPeriodIndex; // 0=Day,1=Week,2=Month
+    bool insightsShowingAiAssessment;
+    std::string insightsAiAssessment;
 
     // MIC_TEST / Audio state
     uint16_t micPeakLevel;   // 0–100, updated each frame by demo_app

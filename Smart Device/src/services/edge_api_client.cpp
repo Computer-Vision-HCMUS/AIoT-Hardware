@@ -26,6 +26,7 @@
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
 #include <SPIFFS.h>
+#include <esp_system.h>
 #include "network_manager.h"
 
 #ifndef EDGE_API_DEBUG
@@ -194,8 +195,9 @@ bool EdgeApiClient::heartbeat() {
 
 bool EdgeApiClient::syncEmotionSession(const String& emotion, float confidence,
                                        String& sessionId) {
-    // Generate a simple client_session_id from millis()
-    const String clientId = "esp32-" + String(millis());
+    // Keep the idempotency key unique across restarts.  millis() resets on
+    // reboot, so it cannot be used by itself or new sessions may be ignored.
+    const String clientId = "esp32-" + String(esp_random(), HEX) + "-" + String(millis(), HEX);
 
     // Normalise emotion label to lowercase (server uses lowercase)
     String label = emotion;
@@ -318,8 +320,9 @@ void EdgeApiClient::parseMediaCards(const String& response,
 
     for (JsonObject card : json["cards"].as<JsonArray>()) {
         const String type    = card["media_type"]  | "";
+        const String mediaId = card["media_id"]    | "";
         const String title   = card["title"]       | "";
-        const String creator = card["creator"]     | "";
+        const String category = card["category"]   | "";
         const String source  = card["source_url"]  | "";
         const int    durSec  = card["duration_sec"] | 0;
 
@@ -329,21 +332,56 @@ void EdgeApiClient::parseMediaCards(const String& response,
 
         if (type == "song" && !title.isEmpty()) {
             Song s;
+            s.mediaId         = mediaId.c_str();
             s.title           = title.c_str();
-            s.artist          = creator.c_str();
+            s.artist          = category.c_str();
             s.duration        = durStr;
             s.isAiRecommended = true;
             s.sourceUrl       = source.c_str();
             songs.push_back(s);
         } else if (type == "podcast" && !title.isEmpty()) {
             PodcastEpisode ep;
+            ep.mediaId         = mediaId.c_str();
             ep.title           = title.c_str();
-            ep.creator         = creator.c_str();
+            ep.creator         = category.c_str();
             ep.duration        = durStr;
             ep.isAiRecommended = true;
             ep.sourceUrl       = source.c_str();
             episodes.push_back(ep);
         }
+    }
+}
+
+void EdgeApiClient::parseMediaLibrary(const String& response,
+                                      std::vector<Song>& songs,
+                                      std::vector<PodcastEpisode>& episodes) {
+    JsonDocument json;
+    if (deserializeJson(json, response) != DeserializationError::Ok) return;
+
+    for (JsonObject item : json["music"].as<JsonArray>()) {
+        const String title = item["title"] | "";
+        if (title.isEmpty()) continue;
+        const int durationSec = item["duration_sec"] | 0;
+        char duration[8];
+        snprintf(duration, sizeof(duration), "%d:%02d", durationSec / 60, durationSec % 60);
+        songs.push_back({
+            (const char*)(item["media_id"] | ""), title.c_str(),
+            (const char*)(item["category"] | ""), duration, false,
+            (const char*)(item["source_url"] | ""),
+        });
+    }
+
+    for (JsonObject item : json["podcasts"].as<JsonArray>()) {
+        const String title = item["title"] | "";
+        if (title.isEmpty()) continue;
+        const int durationSec = item["duration_sec"] | 0;
+        char duration[8];
+        snprintf(duration, sizeof(duration), "%d:%02d", durationSec / 60, durationSec % 60);
+        episodes.push_back({
+            (const char*)(item["media_id"] | ""), title.c_str(),
+            (const char*)(item["category"] | ""), duration, false,
+            (const char*)(item["source_url"] | ""),
+        });
     }
 }
 
@@ -374,36 +412,24 @@ bool EdgeApiClient::getContentRecommendations(const String& emotion,
 // ── UC3 — Full music catalog ──────────────────────────────────────────────────
 
 bool EdgeApiClient::getMusicCatalog(std::vector<Song>& songs) {
-    JsonDocument req;
-    req["media_type"] = "song";
-
-    String payload;
-    serializeJson(req, payload);
-
     String response;
-    if (!postJson("/api/media/recommendations", payload, response)) return false;
+    if (!getJson("/api/media/library", response)) return false;
 
     songs.clear();
-    std::vector<PodcastEpisode> dummy;
-    parseMediaCards(response, songs, dummy);
+    std::vector<PodcastEpisode> ignored;
+    parseMediaLibrary(response, songs, ignored);
     return !songs.empty();
 }
 
 // ── UC3 — Full podcast catalog ────────────────────────────────────────────────
 
 bool EdgeApiClient::getPodcastCatalog(std::vector<PodcastEpisode>& episodes) {
-    JsonDocument req;
-    req["media_type"] = "podcast";
-
-    String payload;
-    serializeJson(req, payload);
-
     String response;
-    if (!postJson("/api/media/recommendations", payload, response)) return false;
+    if (!getJson("/api/media/library", response)) return false;
 
     episodes.clear();
-    std::vector<Song> dummy;
-    parseMediaCards(response, dummy, episodes);
+    std::vector<Song> ignored;
+    parseMediaLibrary(response, ignored, episodes);
     return !episodes.empty();
 }
 
@@ -498,16 +524,16 @@ String EdgeApiClient::deviceToken() const { return network_.deviceToken(); }
 //   {
 //     "period_type": "daily",
 //     "emotion_distribution": {
-//       "happy": 0.45, "neutral": 0.30, "stressed": 0.15,
-//       "sad": 0.05, "angry": 0.03, "tired": 0.02
+//       "angry": 0.10, "calm": 0.20, "disgust": 0.05, "fearful": 0.10,
+//       "happy": 0.25, "neutral": 0.15, "sad": 0.10, "surprised": 0.05
 //     },
 //     ...
 //   }
 //
 // NOTE: Values are decimals (0.0–1.0), NOT integer percentages.
 //       Multiply by 100 before storing into uint8_t fields.
-//       Server labels: happy, neutral, stressed, sad, angry, tired.
-//       "neutral" maps to both calmPct and focusedPct (no "focused" key exists).
+//       Embedded SER labels: angry, calm, disgust, fearful, happy, neutral,
+//       sad and surprised.
 // ─────────────────────────────────────────────────────────────────────────────
 
 bool EdgeApiClient::getStatistics(const String& period,
@@ -544,17 +570,40 @@ bool EdgeApiClient::getStatistics(const String& period,
 
     // Server stores values as decimals 0.0–1.0 (e.g. {"happy": 0.45}).
     // Multiply by 100 before casting to uint8_t to get correct percentages.
-    // Server keys: happy, neutral, stressed, sad, angry, tired.
-    // "neutral" covers both calm and focused display labels (no "focused" key exists).
-    dist.happyPct   = (uint8_t)(((float)(ed["happy"]    | 0.0f)) * 100.0f);
-    dist.calmPct    = (uint8_t)(((float)(ed["neutral"]  | 0.0f)) * 100.0f);
-    dist.focusedPct = (uint8_t)(((float)(ed["neutral"]  | 0.0f)) * 100.0f);
-    dist.sadPct     = (uint8_t)(((float)(ed["sad"]      | 0.0f)) * 100.0f);
-    dist.anxiousPct = (uint8_t)(((float)(ed["stressed"] | 0.0f)) * 100.0f);
+    dist.angryPct     = (uint8_t)(((float)(ed["angry"]     | 0.0f)) * 100.0f);
+    dist.calmPct      = (uint8_t)(((float)(ed["calm"]      | 0.0f)) * 100.0f);
+    dist.disgustPct   = (uint8_t)(((float)(ed["disgust"]   | 0.0f)) * 100.0f);
+    dist.fearfulPct   = (uint8_t)(((float)(ed["fearful"]   | 0.0f)) * 100.0f);
+    dist.happyPct     = (uint8_t)(((float)(ed["happy"]     | 0.0f)) * 100.0f);
+    dist.neutralPct   = (uint8_t)(((float)(ed["neutral"]   | 0.0f)) * 100.0f);
+    dist.sadPct       = (uint8_t)(((float)(ed["sad"]       | 0.0f)) * 100.0f);
+    dist.surprisedPct = (uint8_t)(((float)(ed["surprised"] | 0.0f)) * 100.0f);
 
-    EDGE_LOG("stats period=%s happy=%u calm=%u focused=%u sad=%u anxious=%u",
-             dist.period.c_str(),
-             dist.happyPct, dist.calmPct, dist.focusedPct,
-             dist.sadPct, dist.anxiousPct);
+    EDGE_LOG("stats period=%s angry=%u calm=%u disgust=%u fearful=%u happy=%u neutral=%u sad=%u surprised=%u",
+              dist.period.c_str(),
+             dist.angryPct, dist.calmPct, dist.disgustPct, dist.fearfulPct,
+             dist.happyPct, dist.neutralPct, dist.sadPct, dist.surprisedPct);
+    return true;
+}
+
+bool EdgeApiClient::getStatisticsExplanation(const String& period,
+                                             std::string& explanation) {
+    String seg = period;
+    seg.toLowerCase();
+    if (seg == "daily") seg = "day";
+    else if (seg == "weekly") seg = "week";
+    else if (seg == "monthly") seg = "month";
+    if (seg != "day" && seg != "week" && seg != "month") return false;
+
+    String response;
+    if (!postJson(("/api/statistics/" + seg + "/explain").c_str(), "{}", response)) {
+        return false;
+    }
+
+    JsonDocument json;
+    if (deserializeJson(json, response) != DeserializationError::Ok) return false;
+    const char* text = json["explanation"] | "";
+    if (!text || !*text) return false;
+    explanation = text;
     return true;
 }

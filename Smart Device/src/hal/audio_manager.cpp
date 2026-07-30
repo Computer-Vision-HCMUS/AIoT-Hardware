@@ -28,7 +28,7 @@ constexpr char kCompanionRecordingPath[] = "/companion.pcm";
 constexpr size_t kRecordingChunkSamples = 128;
 constexpr size_t kRecordingWriteBatchBytes = 2048;
 // Keep below the board's SPIFFS capacity and the server's 30 s upload cap.
-constexpr size_t kMaxCompanionRecordingBytes = 20 * AUDIO_SAMPLE_RATE * sizeof(int16_t);
+constexpr size_t kMaxCompanionRecordingBytes = 10 * AUDIO_SAMPLE_RATE * sizeof(int16_t);
 }  // namespace
 
 AudioManager::AudioManager()
@@ -312,7 +312,7 @@ void AudioManager::runRecordingLoop() {
         for (size_t i = 0; i < samples; ++i) pcmBuf[i] = static_cast<int16_t>(readBuf[i] >> 16);
         const size_t bytes = samples * sizeof(int16_t);
         if (recording_bytes_ + pendingBytes + bytes > kMaxCompanionRecordingBytes) {
-            Serial.println("[Audio] Recording reached 20 second limit");
+            Serial.println("[Audio] Recording reached 10 second limit");
             recording_active_ = false;
             break;
         }

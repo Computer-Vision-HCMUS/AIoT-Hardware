@@ -54,5 +54,6 @@ bool takeCompanionVoiceResult(std::string& transcript, std::string& reply,
 
 // ── UC5 — Insights / Statistics ───────────────────────────────────────────
 EmotionDistribution getStatisticsByPeriod(const std::string& period);
+bool getStatisticsAiExplanation(const std::string& period, std::string& explanation);
 
 #endif  // SERVICE_H
