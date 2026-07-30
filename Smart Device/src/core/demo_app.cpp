@@ -28,6 +28,7 @@
 #include "screens/insights_screen.h"
 #include "screens/mic_test_screen.h"
 #include "screens/wifi_screen.h"
+#include "screens/button_test_screen.h"
 
 #include <Arduino.h>
 #include <esp_timer.h>
@@ -111,15 +112,28 @@ bool DemoApp::init() {
     app_state_.supportShowingDetail = false;
     app_state_.supportActivities.clear();
     app_state_.checkInAnalyzing   = true;
+    app_state_.checkInRecording   = false;
+    app_state_.checkInHasRecording = false;
+    app_state_.checkInProcessing  = false;
+    app_state_.checkInInferencePending = false;
+    app_state_.checkInConfirmed = false;
+    app_state_.checkInUncertain   = false;
+    app_state_.checkInRecordingStartMs = 0;
+    app_state_.checkInStatus = "Press REC, then say a short sentence.";
+    app_state_.checkInDetectedEmotion.clear();
+    app_state_.checkInDetectedConfidence = 0;
     app_state_.wifiSetupMenuIndex = 0;
 
     app_state_.sharedContext.lastEmotion         = "Neutral";
     app_state_.sharedContext.confidence          = 0;
     app_state_.sharedContext.isRecording         = false;
+    app_state_.sharedContext.companionRecordingReady = false;
     app_state_.sharedContext.companionSending    = false;
     app_state_.sharedContext.recordingStartMs    = 0;
     app_state_.sharedContext.companionStatus.clear();
     app_state_.sharedContext.insightsPeriodIndex = 0;
+    app_state_.sharedContext.insightsShowingAiAssessment = false;
+    app_state_.sharedContext.insightsAiAssessment.clear();
     app_state_.sharedContext.micPeakLevel        = 0;
     app_state_.sharedContext.audioActive         = false;
     app_state_.sharedContext.mediaPlaying        = false;
@@ -128,7 +142,19 @@ bool DemoApp::init() {
     app_state_.sharedContext.mediaTitle.clear();
     app_state_.sharedContext.mediaStatus.clear();
     app_state_.sharedContext.deviceStatus        = network_ ? network_->statusLabel().c_str() : "Offline";
+    app_state_.sharedContext.buttonPressCounts.fill(0);
+    app_state_.sharedContext.buttonPressed.fill(false);
+    app_state_.sharedContext.lastButtonId = 0;
+    std::string savedEmotion;
+    uint8_t savedConfidence = 0;
+    if (loadConfirmedEmotion(savedEmotion, savedConfidence)) {
+        app_state_.sharedContext.lastEmotion = savedEmotion;
+        app_state_.sharedContext.confidence = savedConfidence;
+        Serial.printf("[CheckIn] Restored confirmed emotion: %s (%u%%)\n",
+                      savedEmotion.c_str(), savedConfidence);
+    }
     last_companion_render_ms_ = 0;
+    last_checkin_render_ms_ = 0;
 
     demo_running_ = true;
     return true;
@@ -179,6 +205,11 @@ bool DemoApp::update() {
     // ── Button input ──
     if (buttons_) {
         buttons_->update();
+        for (uint8_t i = 0; i < 5; ++i) {
+            const ButtonState buttonState = buttons_->getButtonState(static_cast<ButtonID>(i));
+            app_state_.sharedContext.buttonPressCounts[i] = buttonState.press_count;
+            app_state_.sharedContext.buttonPressed[i] = buttonState.currently_pressed;
+        }
 
         ButtonId pressed = ButtonId::MODE;
         bool any = false;
@@ -190,6 +221,7 @@ bool DemoApp::update() {
         else if (buttons_->wasPressed(ButtonID::BACK))   { pressed = ButtonId::BACK;   any = true; }
 
         if (any) {
+            app_state_.sharedContext.lastButtonId = static_cast<uint8_t>(pressed);
             handleButtonPress(app_state_, pressed);
 
             if (app_state_.sharedContext.mediaStopRequested) {
@@ -253,6 +285,7 @@ bool DemoApp::update() {
             case ScreenId::INSIGHTS:       target = DemoState::INSIGHTS;       break;
             case ScreenId::MIC_TEST:       target = DemoState::MIC_TEST;       break;
             case ScreenId::WIFI_SETUP:     target = DemoState::WIFI_SETUP;     break;
+            case ScreenId::BUTTON_TEST:    target = DemoState::BUTTON_TEST;    break;
         }
 
         DemoState current = target;
@@ -285,7 +318,17 @@ bool DemoApp::update() {
             }
             // Returning to HOME → reset check-in state
             if (current == DemoState::HOME) {
+                if (app_state_.checkInRecording) pauseAudioCapture();
                 app_state_.checkInAnalyzing = true;
+                app_state_.checkInRecording = false;
+                app_state_.checkInHasRecording = false;
+                app_state_.checkInProcessing = false;
+                app_state_.checkInInferencePending = false;
+                app_state_.checkInConfirmed = false;
+                app_state_.checkInUncertain = false;
+                app_state_.checkInStatus = "Press REC, then say a short sentence.";
+                app_state_.checkInDetectedEmotion.clear();
+                app_state_.checkInDetectedConfidence = 0;
             }
         }
 
@@ -321,15 +364,65 @@ bool DemoApp::update() {
             needs_redraw_ = true;
         }
 
-        // COMPANION_CHAT: redraw while recording for live timer
+        // COMPANION_CHAT: end recording at 10 seconds. It remains available
+        // for the user to send explicitly with S2 or S3.
         if (current == DemoState::COMPANION_CHAT &&
             app_state_.sharedContext.isRecording) {
-            // Full TFT redraw is expensive.  The timer needs only a 4 Hz update.
             const uint32_t now = millis();
-            if (now - last_companion_render_ms_ >= 250) {
+            if (now - app_state_.sharedContext.recordingStartMs >= 10000) {
+                pauseAudioCapture();
+                app_state_.sharedContext.isRecording = false;
+                app_state_.sharedContext.companionRecordingReady = true;
+                app_state_.sharedContext.companionStatus = "10s recorded. Press S2/S3 to send.";
+                needs_redraw_ = true;
+            } else if (now - last_companion_render_ms_ >= 250) {
+                // Full TFT redraw is expensive. The timer needs only a 4 Hz update.
                 last_companion_render_ms_ = now;
                 needs_redraw_ = true;
             }
+        }
+
+        if (current == DemoState::CHECK_IN && app_state_.checkInRecording) {
+            constexpr uint32_t kCheckInLimitMs = 10000;
+            const uint32_t now = millis();
+            if (now - app_state_.checkInRecordingStartMs >= kCheckInLimitMs) {
+                // Time limit only ends capture.  The user must explicitly
+                // press EXEC before an emotion result is displayed/saved.
+                pauseAudioCapture();
+                app_state_.checkInRecording = false;
+                app_state_.checkInHasRecording = true;
+                app_state_.checkInStatus = "Limit reached. Press EXEC.";
+                needs_redraw_ = true;
+            } else if (now - last_checkin_render_ms_ >= 250) {
+                last_checkin_render_ms_ = now;
+                needs_redraw_ = true;
+            }
+        }
+
+        // Show the processing frame first, then run local SER synchronously on
+        // the following loop. This avoids a stuck FreeRTOS worker state while
+        // still giving the user visible feedback before inference begins.
+        if (current == DemoState::CHECK_IN && app_state_.checkInProcessing &&
+            app_state_.checkInInferencePending &&
+            millis() - app_state_.checkInProcessingStartMs >= 100) {
+            EmotionResult result;
+            bool uncertain = false;
+            app_state_.checkInInferencePending = false;
+            const bool success = finishCheckInCapture(result, uncertain);
+            app_state_.checkInProcessing = false;
+            if (success) {
+                    app_state_.checkInDetectedEmotion = result.label;
+                    app_state_.checkInDetectedConfidence = result.confidence;
+                    app_state_.checkInUncertain = uncertain;
+                    app_state_.checkInAnalyzing = false;
+                    app_state_.checkInConfirmed = false;
+                    app_state_.checkInStatus = uncertain ? "Low confidence - confirm result."
+                                                         : "Confirm to save emotion.";
+            } else {
+                app_state_.checkInHasRecording = false;
+                app_state_.checkInStatus = "Audio too quiet/short. Please try again.";
+            }
+            needs_redraw_ = true;
         }
 
         // ── Render if state changed or input received ──
@@ -366,6 +459,9 @@ bool DemoApp::update() {
                     break;
                 case DemoState::WIFI_SETUP:
                     ScreenHandlers::drawWifiScreen(*display_, app_state_);
+                    break;
+                case DemoState::BUTTON_TEST:
+                    ScreenHandlers::drawButtonTestScreen(*display_, app_state_);
                     break;
                 case DemoState::ERROR_STATE:
                     DemoRendering::renderErrorScreen(*display_, "System Error!");

@@ -29,6 +29,12 @@ void serviceConfigureAudioManager(AudioManager* audio);
 // ── UC1 — Emotion Detection ───────────────────────────────────────────────
 EmotionResult runEmotionDetection();
 
+/** Run local SER on the recorded Check-In PCM clip. */
+bool finishCheckInCapture(EmotionResult& result, bool& isUncertain);
+bool confirmCheckInEmotion(const std::string& label, uint8_t confidence, bool& synced);
+bool loadConfirmedEmotion(std::string& label, uint8_t& confidence);
+
+
 // ── UC1 — Activity Recommendation ────────────────────────────────────────
 ActivityCard getRecommendedActivity(const std::string& emotion);
 std::vector<ActivityCard> getRecommendedActivities(const std::string& emotion);
@@ -48,5 +54,6 @@ bool takeCompanionVoiceResult(std::string& transcript, std::string& reply,
 
 // ── UC5 — Insights / Statistics ───────────────────────────────────────────
 EmotionDistribution getStatisticsByPeriod(const std::string& period);
+bool getStatisticsAiExplanation(const std::string& period, std::string& explanation);
 
 #endif  // SERVICE_H

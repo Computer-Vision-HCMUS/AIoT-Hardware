@@ -28,7 +28,7 @@ constexpr char kCompanionRecordingPath[] = "/companion.pcm";
 constexpr size_t kRecordingChunkSamples = 128;
 constexpr size_t kRecordingWriteBatchBytes = 2048;
 // Keep below the board's SPIFFS capacity and the server's 30 s upload cap.
-constexpr size_t kMaxCompanionRecordingBytes = 20 * AUDIO_SAMPLE_RATE * sizeof(int16_t);
+constexpr size_t kMaxCompanionRecordingBytes = 10 * AUDIO_SAMPLE_RATE * sizeof(int16_t);
 }  // namespace
 
 AudioManager::AudioManager()
@@ -229,8 +229,9 @@ bool AudioManager::startRecording(bool append) {
         return false;
     }
     if (!append) {
-        // FILE_WRITE truncates the old file.  Do not call SPIFFS.remove() here:
-        // deleting a large recording can trigger a long SPIFFS GC pause.
+        // Every new capture must start with an empty PCM file.  FILE_WRITE is
+        // expected to truncate, but assert that behaviour and explicitly
+        // clean stale data if a filesystem implementation does not do so.
         Serial.println("[Audio] Recorder: truncating prior PCM");
         recording_bytes_ = 0;
     }
@@ -247,6 +248,17 @@ bool AudioManager::startRecording(bool append) {
     if (!check) {
         Serial.println("[Audio] Recorder: cannot open PCM file");
         return false;
+    }
+    if (!append && check.size() != 0) {
+        check.close();
+        Serial.println("[Audio] Recorder: stale PCM found; cleaning cache");
+        SPIFFS.remove(kCompanionRecordingPath);
+        check = SPIFFS.open(kCompanionRecordingPath, FILE_WRITE);
+        if (!check || check.size() != 0) {
+            if (check) check.close();
+            Serial.println("[Audio] Recorder: PCM cleanup failed");
+            return false;
+        }
     }
     check.close();
     Serial.println("[Audio] Recorder: PCM file ready");
@@ -300,7 +312,7 @@ void AudioManager::runRecordingLoop() {
         for (size_t i = 0; i < samples; ++i) pcmBuf[i] = static_cast<int16_t>(readBuf[i] >> 16);
         const size_t bytes = samples * sizeof(int16_t);
         if (recording_bytes_ + pendingBytes + bytes > kMaxCompanionRecordingBytes) {
-            Serial.println("[Audio] Recording reached 20 second limit");
+            Serial.println("[Audio] Recording reached 10 second limit");
             recording_active_ = false;
             break;
         }

@@ -26,6 +26,7 @@ struct ActivityCard {
 // Song — element of getRecommendedMusic() result
 // ---------------------------------------------------------------------------
 struct Song {
+    std::string mediaId;
     std::string title;
     std::string artist;
     std::string duration;       // e.g. "3:45"
@@ -37,6 +38,7 @@ struct Song {
 // PodcastEpisode — element of getRecommendedPodcast() result
 // ---------------------------------------------------------------------------
 struct PodcastEpisode {
+    std::string mediaId;
     std::string title;
     std::string creator;
     std::string duration;       // e.g. "12:30"
@@ -49,11 +51,14 @@ struct PodcastEpisode {
 // ---------------------------------------------------------------------------
 struct EmotionDistribution {
     std::string period;         // "Day", "Week", or "Month"
-    uint8_t     happyPct;       // 0–100
+    uint8_t     angryPct;       // 0–100
     uint8_t     calmPct;
-    uint8_t     focusedPct;
+    uint8_t     disgustPct;
+    uint8_t     fearfulPct;
+    uint8_t     happyPct;
+    uint8_t     neutralPct;
     uint8_t     sadPct;
-    uint8_t     anxiousPct;
+    uint8_t     surprisedPct;
 };
 
 // ---------------------------------------------------------------------------

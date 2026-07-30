@@ -16,6 +16,7 @@
  */
 enum class DemoState : uint8_t {
     HOME           = 0,  ///< Landing menu screen
+    BUTTON_TEST    = 10, ///< Physical button diagnostics
     CHECK_IN       = 1,  ///< Emotion detection checkpoint
     SUPPORT        = 2,  ///< Emotion-based activity recommendation
     DISCOVER       = 3,  ///< Content selection hub (Music / Podcast)
@@ -25,7 +26,7 @@ enum class DemoState : uint8_t {
     INSIGHTS       = 7,  ///< Emotion statistics by time period
     MIC_TEST       = 8,  ///< Live audio passthrough: INMP441 → MAX98357
     WIFI_SETUP     = 9,  ///< WiFi mode toggle (connected ↔ AP provisioning)
-    ERROR_STATE    = 10  ///< Fault / error fallback
+    ERROR_STATE    = 11  ///< Fault / error fallback
 };
 
 /**

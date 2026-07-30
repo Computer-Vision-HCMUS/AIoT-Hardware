@@ -16,6 +16,7 @@
 #include "ui_common.h"
 #include "service.h"
 #include <cstdio>
+#include <string>
 
 namespace ScreenHandlers {
 
@@ -51,6 +52,47 @@ static void drawStatBar(DisplayController& display,
     display.drawText(barX + barW + 4, y, buf, 1);
 }
 
+static void drawAiAssessment(DisplayController& display,
+                             const std::string& assessment,
+                             const char* period) {
+    char title[36];
+    snprintf(title, sizeof(title), "AI assessment - %s", period);
+    UICommon::drawLabel(display, 6, 74, title, 1, 110, 190, 255);
+
+    constexpr size_t kCharsPerLine = 30;
+    constexpr uint8_t kMaxLines = 10;
+    std::string line;
+    uint16_t y = 92;
+    uint8_t lines = 0;
+    size_t start = 0;
+
+    while (start < assessment.size() && lines < kMaxLines) {
+        const size_t space = assessment.find(' ', start);
+        const size_t end = (space == std::string::npos) ? assessment.size() : space;
+        const std::string word = assessment.substr(start, end - start);
+
+        if (!line.empty() && line.size() + 1 + word.size() > kCharsPerLine) {
+            display.setColor(224, 230, 242);
+            display.drawText(6, y, line.c_str(), 1);
+            y += 14;
+            ++lines;
+            line.clear();
+            if (lines >= kMaxLines) break;
+        }
+        if (!line.empty()) line += ' ';
+        line += word;
+        start = (space == std::string::npos) ? assessment.size() : space + 1;
+    }
+    if (!line.empty() && lines < kMaxLines) {
+        if (start < assessment.size() && line.size() > kCharsPerLine - 3) {
+            line.resize(kCharsPerLine - 3);
+            line += "...";
+        }
+        display.setColor(224, 230, 242);
+        display.drawText(6, y, line.c_str(), 1);
+    }
+}
+
 void drawInsightsScreen(DisplayController& display, const AppState& state) {
     if (!display.isReady()) return;
 
@@ -76,25 +118,39 @@ void drawInsightsScreen(DisplayController& display, const AppState& state) {
         display.drawText(i * colW + 6, psY + 4, kPeriods[i], 1);
     }
 
+    if (state.sharedContext.insightsShowingAiAssessment) {
+        drawAiAssessment(display, state.sharedContext.insightsAiAssessment, period);
+        UICommon::drawButtonLegend(display,
+            /*S1*/ "CHART",
+            /*S2*/ "NEXT",
+            /*S3*/ "PREV",
+            /*S4*/ "NEXT",
+            /*S5*/ "BACK");
+        return;
+    }
+
     // Fetch stats for the selected period
     const EmotionDistribution dist = getStatisticsByPeriod(period);
 
     // Emotion stat bars
     uint16_t baseY = 74;
-    uint16_t rowH  = 18;
-    drawStatBar(display, "Happy  ", dist.happyPct,   baseY,             255, 200,  60);
-    drawStatBar(display, "Calm   ", dist.calmPct,    baseY + rowH,      60,  200, 120);
-    drawStatBar(display, "Focused", dist.focusedPct, baseY + rowH * 2,  80,  160, 255);
-    drawStatBar(display, "Sad    ", dist.sadPct,     baseY + rowH * 3,  100, 130, 200);
-    drawStatBar(display, "Anxious", dist.anxiousPct, baseY + rowH * 4,  200, 100, 100);
+    uint16_t rowH  = 16;
+    drawStatBar(display, "Angry    ", dist.angryPct,     baseY,             230, 95, 85);
+    drawStatBar(display, "Calm     ", dist.calmPct,      baseY + rowH,      80, 195, 165);
+    drawStatBar(display, "Disgust  ", dist.disgustPct,   baseY + rowH * 2,  145, 115, 185);
+    drawStatBar(display, "Fearful  ", dist.fearfulPct,   baseY + rowH * 3,  215, 135, 95);
+    drawStatBar(display, "Happy    ", dist.happyPct,     baseY + rowH * 4,  255, 200, 60);
+    drawStatBar(display, "Neutral  ", dist.neutralPct,   baseY + rowH * 5,  100, 190, 220);
+    drawStatBar(display, "Sad      ", dist.sadPct,       baseY + rowH * 6,  100, 130, 200);
+    drawStatBar(display, "Surprise ", dist.surprisedPct, baseY + rowH * 7,  255, 160, 220);
 
     // Summary note
     char summary[48];
     snprintf(summary, sizeof(summary), "Period: %s  |  AI-analyzed", dist.period.c_str());
-    UICommon::drawLabel(display, 6, 167, summary, 1, 90, 110, 140);
+    UICommon::drawLabel(display, 6, 205, summary, 1, 90, 110, 140);
 
     UICommon::drawButtonLegend(display,
-        /*S1*/ "--",
+        /*S1*/ "AI VIEW",
         /*S2*/ "NEXT",
         /*S3*/ "PREV",
         /*S4*/ "NEXT",
