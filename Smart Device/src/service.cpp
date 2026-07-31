@@ -450,8 +450,8 @@ bool beginCompanionVoiceRequest() {
     }
     g_companion_voice_result_ready = false;
     g_companion_voice_busy = true;
-    // Deliberately synchronous: after SEND the app waits for the complete
-    // STT/LLM/TTS result instead of running a separate network task.
+    // Sequential by design. DemoApp renders the Thinking state before this
+    // blocking Whisper / LLM / TTS request is invoked.
     sendCompanionVoiceRequest();
     return true;
 }

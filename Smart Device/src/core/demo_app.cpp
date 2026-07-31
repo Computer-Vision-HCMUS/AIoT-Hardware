@@ -129,6 +129,7 @@ bool DemoApp::init() {
     app_state_.sharedContext.isRecording         = false;
     app_state_.sharedContext.companionRecordingReady = false;
     app_state_.sharedContext.companionSending    = false;
+    app_state_.sharedContext.companionSendRequested = false;
     app_state_.sharedContext.recordingStartMs    = 0;
     app_state_.sharedContext.companionStatus.clear();
     app_state_.sharedContext.insightsPeriodIndex = 0;
@@ -473,6 +474,17 @@ bool DemoApp::update() {
             }
 
             last_rendered_state_ = current;
+        }
+
+        // Render Thinking... first, then run the voice API sequentially.
+        if (current == DemoState::COMPANION_CHAT &&
+            app_state_.sharedContext.companionSendRequested) {
+            app_state_.sharedContext.companionSendRequested = false;
+            if (!beginCompanionVoiceRequest()) {
+                app_state_.sharedContext.companionSending = false;
+                app_state_.sharedContext.companionStatus = "Cannot send recording";
+                needs_redraw_ = true;
+            }
         }
     }
 

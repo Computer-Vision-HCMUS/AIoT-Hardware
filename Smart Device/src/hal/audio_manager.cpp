@@ -19,6 +19,9 @@ constexpr uint32_t kSampleRate = AUDIO_SAMPLE_RATE;
 constexpr size_t kDmaBufLen = AUDIO_DMA_BUF_LEN;
 constexpr int kDmaBufCount = AUDIO_DMA_BUF_COUNT;
 constexpr uint32_t kTaskStackSz = 4096;
+// HTTPClient plus a 1 KiB PCM buffer needs more headroom than the simple
+// passthrough task.  A shallow stack can surface as intermittent -11 errors.
+constexpr uint32_t kStreamTaskStackSz = 8192;
 constexpr uint32_t kRecordingTaskStackSz = 8192;
 constexpr UBaseType_t kRecordingTaskPrio = 2;
 constexpr UBaseType_t kTaskPrio = 5;
@@ -134,7 +137,7 @@ bool AudioManager::startStream(const std::string& url, const std::string& device
     gpio_set_level((gpio_num_t)I2S_SPK_SD_PIN, 1);
     i2s_zero_dma_buffer(I2S_SPK_PORT);
     stream_active_ = true;
-    if (xTaskCreate(AudioManager::streamTask, "media_pcm", kTaskStackSz,
+    if (xTaskCreate(AudioManager::streamTask, "media_pcm", kStreamTaskStackSz,
                     this, kTaskPrio, &stream_task_handle_) != pdPASS) {
         stream_active_ = false;
         gpio_set_level((gpio_num_t)I2S_SPK_SD_PIN, 0);
@@ -167,47 +170,44 @@ void AudioManager::streamTask(void* arg) {
 }
 
 void AudioManager::runStreamLoop() {
-    HTTPClient http;
-    http.setTimeout(1000);
-    http.setReuse(false);
-    if (!http.begin(stream_url_.c_str())) {
-        Serial.println("[Audio] PCM HTTP begin failed");
-        stream_active_ = false;
-        stream_task_handle_ = nullptr;
-        vTaskDelete(nullptr);
-        return;
-    }
-    if (!stream_device_token_.empty()) http.addHeader("X-Device-Token", stream_device_token_.c_str());
-
-    const int status = http.GET();
-    if (status != HTTP_CODE_OK) {
-        Serial.printf("[Audio] PCM stream HTTP %d\n", status);
-        http.end();
-        stream_active_ = false;
-        stream_task_handle_ = nullptr;
-        vTaskDelete(nullptr);
-        return;
-    }
-
-    Serial.printf("[Audio] PCM stream connected: %d bytes\n", http.getSize());
-
-    WiFiClient* input = http.getStreamPtr();
-    uint8_t buffer[1024];
     size_t totalBytes = 0;
-    while (stream_active_ && (http.connected() || input->available())) {
-        const size_t available = input->available();
-        if (available == 0) {
-            vTaskDelay(pdMS_TO_TICKS(1));
-            continue;
+    bool connected = false;
+    // The server retains a reply briefly, allowing a second GET if the ESP
+    // loses the TCP connection before response headers arrive (-11).
+    for (uint8_t attempt = 1; stream_active_ && attempt <= 2 && !connected; ++attempt) {
+        HTTPClient http;
+        http.setTimeout(5000);
+        http.setReuse(false);
+        if (!http.begin(stream_url_.c_str())) {
+            Serial.printf("[Audio] PCM HTTP begin failed (attempt %u)\n", attempt);
+        } else {
+            if (!stream_device_token_.empty()) http.addHeader("X-Device-Token", stream_device_token_.c_str());
+            const int status = http.GET();
+            if (status != HTTP_CODE_OK) {
+                Serial.printf("[Audio] PCM stream HTTP %d (attempt %u)\n", status, attempt);
+            } else {
+                connected = true;
+                Serial.printf("[Audio] PCM stream connected: %d bytes\n", http.getSize());
+                WiFiClient* input = http.getStreamPtr();
+                uint8_t buffer[1024];
+                while (stream_active_ && (http.connected() || input->available())) {
+                    const size_t available = input->available();
+                    if (available == 0) {
+                        vTaskDelay(pdMS_TO_TICKS(1));
+                        continue;
+                    }
+                    const size_t bytesToRead = available < sizeof(buffer) ? available : sizeof(buffer);
+                    const size_t bytesRead = input->readBytes(buffer, bytesToRead);
+                    if (bytesRead == 0) continue;
+                    size_t bytesWritten = 0;
+                    i2s_write(I2S_SPK_PORT, buffer, bytesRead, &bytesWritten, portMAX_DELAY);
+                    totalBytes += bytesWritten;
+                }
+            }
+            http.end();
         }
-        const size_t bytesToRead = available < sizeof(buffer) ? available : sizeof(buffer);
-        const size_t bytesRead = input->readBytes(buffer, bytesToRead);
-        if (bytesRead == 0) continue;
-        size_t bytesWritten = 0;
-        i2s_write(I2S_SPK_PORT, buffer, bytesRead, &bytesWritten, portMAX_DELAY);
-        totalBytes += bytesWritten;
+        if (!connected && stream_active_ && attempt < 2) vTaskDelay(pdMS_TO_TICKS(150));
     }
-    http.end();
     stream_active_ = false;
     stream_task_handle_ = nullptr;
     i2s_zero_dma_buffer(I2S_SPK_PORT);
@@ -229,11 +229,12 @@ bool AudioManager::startRecording(bool append) {
         return false;
     }
     if (!append) {
-        // Every new capture must start with an empty PCM file.  FILE_WRITE is
-        // expected to truncate, but assert that behaviour and explicitly
-        // clean stale data if a filesystem implementation does not do so.
+        // FILE_WRITE is not reliably truncating on every Arduino SPIFFS
+        // version. Remove the disposable cache first so a new utterance never
+        // uploads bytes from the previous one.
         Serial.println("[Audio] Recorder: truncating prior PCM");
         recording_bytes_ = 0;
+        SPIFFS.remove(kCompanionRecordingPath);  // false simply means no old cache.
     }
     File check = SPIFFS.open(kCompanionRecordingPath, append ? FILE_APPEND : FILE_WRITE);
     if (!check && !append) {
@@ -248,17 +249,6 @@ bool AudioManager::startRecording(bool append) {
     if (!check) {
         Serial.println("[Audio] Recorder: cannot open PCM file");
         return false;
-    }
-    if (!append && check.size() != 0) {
-        check.close();
-        Serial.println("[Audio] Recorder: stale PCM found; cleaning cache");
-        SPIFFS.remove(kCompanionRecordingPath);
-        check = SPIFFS.open(kCompanionRecordingPath, FILE_WRITE);
-        if (!check || check.size() != 0) {
-            if (check) check.close();
-            Serial.println("[Audio] Recorder: PCM cleanup failed");
-            return false;
-        }
     }
     check.close();
     Serial.println("[Audio] Recorder: PCM file ready");
@@ -277,8 +267,12 @@ bool AudioManager::startRecording(bool append) {
 void AudioManager::pauseRecording() {
     recording_active_ = false;
     if (recording_task_handle_ != nullptr) {
-        vTaskDelay(pdMS_TO_TICKS(120));
+        // Let the recorder flush its final partial PCM batch and close SPIFFS
+        // before the voice request opens the same file for upload.
+        for (uint8_t waited = 0; recording_task_handle_ != nullptr && waited < 50; ++waited)
+            vTaskDelay(pdMS_TO_TICKS(10));
         if (recording_task_handle_ != nullptr) {
+            Serial.println("[Audio] Recorder: stop timed out");
             vTaskDelete(recording_task_handle_);
             recording_task_handle_ = nullptr;
         }

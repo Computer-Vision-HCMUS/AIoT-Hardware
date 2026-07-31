@@ -48,6 +48,7 @@ struct SharedContext {
     bool     isRecording;
     bool     companionRecordingReady;
     bool     companionSending;
+    bool     companionSendRequested; // render Thinking before sequential API call
     uint32_t recordingStartMs;  // millis() when recording began
     std::string companionStatus;
     std::vector<ChatMessage> chatHistory;

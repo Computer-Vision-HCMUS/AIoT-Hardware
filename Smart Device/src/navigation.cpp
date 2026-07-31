@@ -319,12 +319,8 @@ void handleCompanionChatInput(AppState& state, ButtonId button, uint32_t nowMs) 
         }
         state.sharedContext.companionSending = true;
         state.sharedContext.companionStatus = "Thinking...";
-        if (!beginCompanionVoiceRequest()) {
-            state.sharedContext.companionSending = false;
-            state.sharedContext.companionStatus = "Cannot send recording";
-        } else {
-            state.sharedContext.companionRecordingReady = false;
-        }
+        state.sharedContext.companionSendRequested = true;
+        state.sharedContext.companionRecordingReady = false;
     } else if (button == ButtonId::ACTION) {
         // STOP — end recording session; add mock messages
         if (state.sharedContext.isRecording) {
@@ -334,10 +330,7 @@ void handleCompanionChatInput(AppState& state, ButtonId button, uint32_t nowMs) 
         if (!state.sharedContext.isRecording) {
             state.sharedContext.companionSending = true;
             state.sharedContext.companionStatus = "Thinking...";
-            if (!beginCompanionVoiceRequest()) {
-                state.sharedContext.companionSending = false;
-                state.sharedContext.companionStatus = "Cannot send recording";
-            }
+            state.sharedContext.companionSendRequested = true;
         }
     } else if (button == ButtonId::BACK) {
         pauseAudioCapture();
