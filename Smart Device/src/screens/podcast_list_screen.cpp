@@ -44,7 +44,7 @@ std::string categoryLabel(const std::string& category) {
 void drawPodcastListScreen(DisplayController& display, const AppState& state) {
     if (!display.isReady()) return;
 
-    const auto episodes = getRecommendedPodcast();
+    const auto& episodes = getRecommendedPodcast();
     const uint8_t total = (uint8_t)episodes.size();
 
     UICommon::drawScreenFrame(display, "Podcast", "All episodes - AI marked");

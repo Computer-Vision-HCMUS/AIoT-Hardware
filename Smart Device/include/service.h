@@ -40,8 +40,9 @@ ActivityCard getRecommendedActivity(const std::string& emotion);
 std::vector<ActivityCard> getRecommendedActivities(const std::string& emotion);
 
 // ── UC2/UC3 — Content ─────────────────────────────────────────────────────
-std::vector<Song>           getRecommendedMusic();
-std::vector<PodcastEpisode> getRecommendedPodcast();
+/** Cached catalog views — do not copy; heap is tight during PCM streaming. */
+const std::vector<Song>&           getRecommendedMusic();
+const std::vector<PodcastEpisode>& getRecommendedPodcast();
 
 // ── UC4 — Companion Chat ──────────────────────────────────────────────────
 std::string getCompanionReply(const std::string& userMessage);

@@ -10,6 +10,7 @@
 #include <cstring>
 #include <driver/gpio.h>
 #include <driver/i2s.h>
+#include <esp_wifi.h>
 #include <HTTPClient.h>
 #include <SPIFFS.h>
 #include <WiFi.h>
@@ -19,13 +20,20 @@ constexpr uint32_t kSampleRate = AUDIO_SAMPLE_RATE;
 constexpr size_t kDmaBufLen = AUDIO_DMA_BUF_LEN;
 constexpr int kDmaBufCount = AUDIO_DMA_BUF_COUNT;
 constexpr uint32_t kTaskStackSz = 4096;
-// HTTPClient plus a 1 KiB PCM buffer needs more headroom than the simple
-// passthrough task.  A shallow stack can surface as intermittent -11 errors.
-constexpr uint32_t kStreamTaskStackSz = 8192;
+// HTTPClient (especially HTTPS) needs headroom; PCM scratch is static, not on-stack.
+constexpr uint32_t kStreamTaskStackSz = 12288;
 constexpr uint32_t kRecordingTaskStackSz = 8192;
 constexpr UBaseType_t kRecordingTaskPrio = 2;
 constexpr UBaseType_t kTaskPrio = 5;
+constexpr UBaseType_t kPlaybackTaskPrio = kTaskPrio + 1;
+constexpr UBaseType_t kStreamTaskPrio = kTaskPrio;
 constexpr char kCompanionRecordingPath[] = "/companion.pcm";
+constexpr size_t kStreamBufferBytes = AUDIO_SAMPLE_RATE;  // ~0.5 s at 16-bit mono
+constexpr size_t kPlaybackPrebufferBytes = kStreamBufferBytes / 2;         // ~250 ms
+constexpr size_t kPlaybackChunkBytes = 2048;
+constexpr size_t kPcmAccumBytes = 2048;
+constexpr TickType_t kStreamSendWaitTicks = pdMS_TO_TICKS(20);
+constexpr TickType_t kPlaybackReceiveWaitTicks = pdMS_TO_TICKS(20);
 // Keep the recorder task stack small and predictable.  The I2S DMA buffers
 // already absorb timing jitter; a 128-sample conversion chunk is enough.
 constexpr size_t kRecordingChunkSamples = 128;
@@ -40,7 +48,10 @@ AudioManager::AudioManager()
       task_handle_(nullptr),
       peak_level_(0),
       stream_active_(false),
+      stream_producer_done_(false),
       stream_task_handle_(nullptr),
+      playback_task_handle_(nullptr),
+      stream_buffer_(nullptr),
       recording_active_(false),
       recording_task_handle_(nullptr),
       recording_bytes_(0) {}
@@ -113,6 +124,10 @@ void AudioManager::deinit() {
     stopStream();
     stopRecording();
     stopPassthrough();
+    if (stream_buffer_ != nullptr) {
+        vStreamBufferDelete(stream_buffer_);
+        stream_buffer_ = nullptr;
+    }
     if (initialized_) {
         i2s_driver_uninstall(I2S_SPK_PORT);
         i2s_driver_uninstall(I2S_MIC_PORT);
@@ -124,6 +139,8 @@ void AudioManager::deinit() {
 bool AudioManager::startStream(const std::string& url, const std::string& deviceToken) {
     if (url.empty()) return false;
 
+    // Always tear down any prior producer/playback — even if stream_active_
+    // is already false after a finished track.
     stopStream();
     stopPassthrough();
 
@@ -131,16 +148,42 @@ bool AudioManager::startStream(const std::string& url, const std::string& device
 
     if (WiFi.status() != WL_CONNECTED) return false;
 
+    WiFi.setSleep(false);
+    esp_wifi_set_ps(WIFI_PS_NONE);
+
+    // Reuse one ring buffer across plays to avoid heap fragmentation crashes.
+    if (stream_buffer_ == nullptr) {
+        stream_buffer_ = xStreamBufferCreate(kStreamBufferBytes, 1);
+        if (stream_buffer_ == nullptr) {
+            Serial.println("[Audio] PCM stream buffer create failed");
+            return false;
+        }
+    } else {
+        xStreamBufferReset(stream_buffer_);
+    }
+
     stream_url_ = url + (url.find('?') == std::string::npos ? "?format=pcm" : "&format=pcm");
     stream_device_token_ = deviceToken;
     Serial.printf("[Audio] Starting PCM stream: %s\n", stream_url_.c_str());
-    gpio_set_level((gpio_num_t)I2S_SPK_SD_PIN, 1);
     i2s_zero_dma_buffer(I2S_SPK_PORT);
     stream_active_ = true;
-    if (xTaskCreate(AudioManager::streamTask, "media_pcm", kStreamTaskStackSz,
-                    this, kTaskPrio, &stream_task_handle_) != pdPASS) {
+    stream_producer_done_ = false;
+
+    if (xTaskCreatePinnedToCore(AudioManager::streamTask, "media_pcm", kStreamTaskStackSz,
+                                 this, kStreamTaskPrio, &stream_task_handle_, APP_CPU_NUM) != pdPASS) {
         stream_active_ = false;
-        gpio_set_level((gpio_num_t)I2S_SPK_SD_PIN, 0);
+        return false;
+    }
+    if (xTaskCreatePinnedToCore(AudioManager::playbackTask, "media_pcm_pb", kTaskStackSz,
+                                 this, kPlaybackTaskPrio, &playback_task_handle_, PRO_CPU_NUM) != pdPASS) {
+        stream_active_ = false;
+        stream_producer_done_ = true;
+        for (uint8_t waited = 0; stream_task_handle_ != nullptr && waited < 100; ++waited)
+            vTaskDelay(pdMS_TO_TICKS(10));
+        if (stream_task_handle_ != nullptr) {
+            vTaskDelete(stream_task_handle_);
+            stream_task_handle_ = nullptr;
+        }
         return false;
     }
     return true;
@@ -148,19 +191,50 @@ bool AudioManager::startStream(const std::string& url, const std::string& device
 
 void AudioManager::stopStream() {
     stream_active_ = false;
-    if (stream_task_handle_ != nullptr) {
-        vTaskDelay(pdMS_TO_TICKS(100));
-        if (stream_task_handle_ != nullptr) {
-            vTaskDelete(stream_task_handle_);
-            stream_task_handle_ = nullptr;
-        }
+    // Unblock playback if it is waiting on the prebuffer threshold.
+    stream_producer_done_ = true;
+
+    // Let producer finish http.end() and playback leave i2s_write — force
+    // delete mid-call leaks sockets / wedges I2S and the next Play crashes.
+    for (uint8_t waited = 0;
+         (stream_task_handle_ != nullptr || playback_task_handle_ != nullptr) && waited < 250;
+         ++waited) {
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
-    if (initialized_) i2s_zero_dma_buffer(I2S_SPK_PORT);
+
+    bool forceDeleted = false;
+    if (stream_task_handle_ != nullptr) {
+        Serial.println("[Audio] PCM producer stop timed out");
+        vTaskDelete(stream_task_handle_);
+        stream_task_handle_ = nullptr;
+        forceDeleted = true;
+    }
+    if (playback_task_handle_ != nullptr) {
+        Serial.println("[Audio] PCM playback stop timed out");
+        vTaskDelete(playback_task_handle_);
+        playback_task_handle_ = nullptr;
+        forceDeleted = true;
+    }
+
+    if (stream_buffer_ != nullptr) {
+        xStreamBufferReset(stream_buffer_);
+    }
+
+    if (forceDeleted && initialized_) {
+        i2s_stop(I2S_SPK_PORT);
+        i2s_zero_dma_buffer(I2S_SPK_PORT);
+        i2s_start(I2S_SPK_PORT);
+    } else if (initialized_) {
+        i2s_zero_dma_buffer(I2S_SPK_PORT);
+    }
     gpio_set_level((gpio_num_t)I2S_SPK_SD_PIN, 0);
+    stream_producer_done_ = false;
+    esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
+    WiFi.setSleep(true);
 }
 
 void AudioManager::update() {
-    // PCM transfer and I2S output run in runStreamLoop().
+    // PCM transfer and I2S output run in FreeRTOS tasks.
 }
 
 bool AudioManager::isStreaming() const { return stream_active_; }
@@ -172,12 +246,32 @@ void AudioManager::streamTask(void* arg) {
 void AudioManager::runStreamLoop() {
     size_t totalBytes = 0;
     bool connected = false;
-    // The server retains a reply briefly, allowing a second GET if the ESP
-    // loses the TCP connection before response headers arrive (-11).
+    // Keep large PCM scratch off the task stack — HTTPS + HTTPClient already
+    // consume most of the 12 KiB budget and overflow was crashing after a few plays.
+    static uint8_t s_pcm_accum[kPcmAccumBytes];
+
+    auto enqueuePcm = [&](const uint8_t* data, size_t len) {
+        size_t offset = 0;
+        while (offset < len && stream_active_ && stream_buffer_ != nullptr) {
+            if (xStreamBufferBytesAvailable(stream_buffer_) > (kStreamBufferBytes * 85) / 100) {
+                vTaskDelay(pdMS_TO_TICKS(10));
+            }
+            const size_t sent = xStreamBufferSend(stream_buffer_, data + offset, len - offset,
+                                                    kStreamSendWaitTicks);
+            if (sent == 0) {
+                vTaskDelay(pdMS_TO_TICKS(2));
+                continue;
+            }
+            offset += sent;
+            totalBytes += sent;
+        }
+    };
+
     for (uint8_t attempt = 1; stream_active_ && attempt <= 2 && !connected; ++attempt) {
         HTTPClient http;
-        http.setTimeout(5000);
+        http.setTimeout(2000);
         http.setReuse(false);
+        http.useHTTP10(true);
         if (!http.begin(stream_url_.c_str())) {
             Serial.printf("[Audio] PCM HTTP begin failed (attempt %u)\n", attempt);
         } else {
@@ -187,32 +281,171 @@ void AudioManager::runStreamLoop() {
                 Serial.printf("[Audio] PCM stream HTTP %d (attempt %u)\n", status, attempt);
             } else {
                 connected = true;
-                Serial.printf("[Audio] PCM stream connected: %d bytes\n", http.getSize());
                 WiFiClient* input = http.getStreamPtr();
-                uint8_t buffer[1024];
-                while (stream_active_ && (http.connected() || input->available())) {
-                    const size_t available = input->available();
-                    if (available == 0) {
-                        vTaskDelay(pdMS_TO_TICKS(1));
-                        continue;
+                const int contentLength = http.getSize();
+
+                if (contentLength >= 0) {
+                    // Content-Length / HTTP1.0 body: raw PCM bytes.
+                    while (stream_active_ && (http.connected() || input->available())) {
+                        const size_t available = input->available();
+                        if (available == 0) {
+                            vTaskDelay(pdMS_TO_TICKS(1));
+                            continue;
+                        }
+                        const size_t toRead =
+                            available < sizeof(s_pcm_accum) ? available : sizeof(s_pcm_accum);
+                        const size_t bytesRead = input->readBytes(s_pcm_accum, toRead);
+                        if (bytesRead > 0) enqueuePcm(s_pcm_accum, bytesRead);
                     }
-                    const size_t bytesToRead = available < sizeof(buffer) ? available : sizeof(buffer);
-                    const size_t bytesRead = input->readBytes(buffer, bytesToRead);
-                    if (bytesRead == 0) continue;
-                    size_t bytesWritten = 0;
-                    i2s_write(I2S_SPK_PORT, buffer, bytesRead, &bytesWritten, portMAX_DELAY);
-                    totalBytes += bytesWritten;
+                } else {
+                    // Transfer-Encoding: chunked — parse sizes without Arduino String
+                    // (unbounded String += caused heap crashes after several tracks).
+                    enum ChunkState { READ_HEADER, READ_DATA, READ_CRLF, EOF_CHUNKED };
+                    ChunkState chunkState = READ_HEADER;
+                    size_t chunkBytesRemaining = 0;
+                    char headerBuf[16];
+                    size_t headerLen = 0;
+                    size_t pcm_accum_len = 0;
+
+                    while (stream_active_ && (http.connected() || input->available())) {
+                        if (chunkState == READ_HEADER) {
+                            while (input->available() && chunkState == READ_HEADER && stream_active_) {
+                                const char c = static_cast<char>(input->read());
+                                if (c == '\n') {
+                                    headerBuf[headerLen] = '\0';
+                                    while (headerLen > 0 &&
+                                           (headerBuf[headerLen - 1] == '\r' ||
+                                            headerBuf[headerLen - 1] == ' ')) {
+                                        headerBuf[--headerLen] = '\0';
+                                    }
+                                    if (headerLen > 0) {
+                                        chunkBytesRemaining = strtoul(headerBuf, nullptr, 16);
+                                        chunkState = (chunkBytesRemaining == 0) ? EOF_CHUNKED
+                                                                                : READ_DATA;
+                                    }
+                                    headerLen = 0;
+                                } else if (headerLen + 1 < sizeof(headerBuf)) {
+                                    headerBuf[headerLen++] = c;
+                                } else {
+                                    Serial.println("[Audio] PCM chunk header overflow");
+                                    chunkState = EOF_CHUNKED;
+                                    break;
+                                }
+                            }
+                        } else if (chunkState == READ_DATA) {
+                            while (chunkBytesRemaining > 0 && input->available() && stream_active_) {
+                                size_t toRead = chunkBytesRemaining;
+                                if (toRead > sizeof(s_pcm_accum) - pcm_accum_len) {
+                                    toRead = sizeof(s_pcm_accum) - pcm_accum_len;
+                                }
+                                if (toRead > input->available()) toRead = input->available();
+                                const size_t bytesRead =
+                                    input->readBytes(s_pcm_accum + pcm_accum_len, toRead);
+                                if (bytesRead == 0) break;
+                                pcm_accum_len += bytesRead;
+                                chunkBytesRemaining -= bytesRead;
+                                if (pcm_accum_len >= 1024) {
+                                    enqueuePcm(s_pcm_accum, pcm_accum_len);
+                                    pcm_accum_len = 0;
+                                }
+                            }
+                            if (chunkBytesRemaining == 0) chunkState = READ_CRLF;
+                        } else if (chunkState == READ_CRLF) {
+                            if (input->available() >= 2) {
+                                input->read();
+                                input->read();
+                                chunkState = READ_HEADER;
+                                if (pcm_accum_len > 0) {
+                                    enqueuePcm(s_pcm_accum, pcm_accum_len);
+                                    pcm_accum_len = 0;
+                                }
+                            } else {
+                                vTaskDelay(pdMS_TO_TICKS(1));
+                            }
+                        } else if (chunkState == EOF_CHUNKED) {
+                            if (pcm_accum_len > 0) {
+                                enqueuePcm(s_pcm_accum, pcm_accum_len);
+                                pcm_accum_len = 0;
+                            }
+                            break;
+                        }
+                        if (input->available() == 0) vTaskDelay(pdMS_TO_TICKS(1));
+                    }
+                    if (pcm_accum_len > 0) enqueuePcm(s_pcm_accum, pcm_accum_len);
                 }
             }
             http.end();
         }
         if (!connected && stream_active_ && attempt < 2) vTaskDelay(pdMS_TO_TICKS(150));
     }
-    stream_active_ = false;
+    stream_producer_done_ = true;
     stream_task_handle_ = nullptr;
-    i2s_zero_dma_buffer(I2S_SPK_PORT);
+    Serial.printf("[Audio] PCM stream finished: %u bytes queued\n", (unsigned)totalBytes);
+    vTaskDelete(nullptr);
+}
+
+void AudioManager::playbackTask(void* arg) {
+    static_cast<AudioManager*>(arg)->runPlaybackLoop();
+}
+
+void AudioManager::runPlaybackLoop() {
+    uint8_t buffer[kPlaybackChunkBytes];
+    bool amp_enabled = false;
+    while (stream_active_) {
+        StreamBufferHandle_t buf = stream_buffer_;
+        if (buf == nullptr) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+            continue;
+        }
+
+        const size_t available = xStreamBufferBytesAvailable(buf);
+        if (available < kPlaybackPrebufferBytes && !stream_producer_done_) {
+            vTaskDelay(pdMS_TO_TICKS(5));
+            continue;
+        }
+
+        size_t bytesRead = 0;
+        while (bytesRead < sizeof(buffer) && stream_active_) {
+            buf = stream_buffer_;
+            if (buf == nullptr) break;
+            const size_t chunk = xStreamBufferReceive(buf, buffer + bytesRead,
+                                                       sizeof(buffer) - bytesRead,
+                                                       kPlaybackReceiveWaitTicks);
+            if (chunk > 0) {
+                bytesRead += chunk;
+                continue;
+            }
+            if (stream_producer_done_) break;
+        }
+        if (bytesRead == 0 && stream_producer_done_) break;
+
+        // Only write what we have — avoid stuffing silence underruns into I2S
+        // as full frames (extra DMA work / edge clicks under load).
+        if (bytesRead == 0) {
+            vTaskDelay(pdMS_TO_TICKS(2));
+            continue;
+        }
+        if (bytesRead & 1) --bytesRead;
+
+        if (!amp_enabled) {
+            gpio_set_level((gpio_num_t)I2S_SPK_SD_PIN, 1);
+            amp_enabled = true;
+        }
+
+        size_t offset = 0;
+        while (offset < bytesRead && stream_active_) {
+            size_t bytesWritten = 0;
+            if (i2s_write(I2S_SPK_PORT, buffer + offset, bytesRead - offset,
+                          &bytesWritten, pdMS_TO_TICKS(100)) != ESP_OK) {
+                break;
+            }
+            if (bytesWritten == 0) break;
+            offset += bytesWritten;
+        }
+    }
     gpio_set_level((gpio_num_t)I2S_SPK_SD_PIN, 0);
-    Serial.printf("[Audio] PCM stream finished: %u bytes written\n", (unsigned)totalBytes);
+    stream_active_ = false;
+    playback_task_handle_ = nullptr;
     vTaskDelete(nullptr);
 }
 

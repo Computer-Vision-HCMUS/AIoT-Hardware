@@ -238,14 +238,14 @@ bool DemoApp::update() {
                 std::string title;
                 std::string url;
                 if (app_state_.currentScreen == ScreenId::MUSIC_LIST) {
-                    const auto songs = getRecommendedMusic();
+                    const auto& songs = getRecommendedMusic();
                     if (app_state_.musicScrollIndex < songs.size()) {
                         const Song& selected = songs[app_state_.musicScrollIndex];
                         title = selected.title;
                         url = selected.sourceUrl;
                     }
                 } else if (app_state_.currentScreen == ScreenId::PODCAST_LIST) {
-                    const auto episodes = getRecommendedPodcast();
+                    const auto& episodes = getRecommendedPodcast();
                     if (app_state_.podcastScrollIndex < episodes.size()) {
                         const PodcastEpisode& selected = episodes[app_state_.podcastScrollIndex];
                         title = selected.title;

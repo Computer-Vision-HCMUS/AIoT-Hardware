@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <string>
 #include <freertos/FreeRTOS.h>
+#include <freertos/stream_buffer.h>
 #include <freertos/task.h>
 
 class AudioManager {
@@ -48,7 +49,10 @@ private:
     volatile uint16_t peak_level_;
 
     volatile bool stream_active_;
+    volatile bool stream_producer_done_;
     TaskHandle_t stream_task_handle_;
+    TaskHandle_t playback_task_handle_;
+    StreamBufferHandle_t stream_buffer_;
     std::string stream_url_;
     std::string stream_device_token_;
 
@@ -60,6 +64,8 @@ private:
     void runAudioLoop();
     static void streamTask(void* arg);
     void runStreamLoop();
+    static void playbackTask(void* arg);
+    void runPlaybackLoop();
     static void recordingTask(void* arg);
     void runRecordingLoop();
 };

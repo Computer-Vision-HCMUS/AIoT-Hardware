@@ -44,7 +44,7 @@ std::string categoryLabel(const std::string& category) {
 void drawMusicListScreen(DisplayController& display, const AppState& state) {
     if (!display.isReady()) return;
 
-    const auto songs = getRecommendedMusic();
+    const auto& songs = getRecommendedMusic();
     const uint8_t total = (uint8_t)songs.size();
 
     UICommon::drawScreenFrame(display, "Music", "All tracks - AI marked");
