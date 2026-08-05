@@ -13,13 +13,13 @@
 #include "demo.h"
 
 /**
- * @brief Phát 1 tiếng sine 440Hz kéo dài 5 giây qua loa để test loa nhanh.
+ * @brief Phát 1 tiếng sine 440Hz kéo dài 3 giây qua loa để test loa nhanh.
  * LƯU Ý: AudioManager::init() (gọi bên trong demo_init()) đã cài driver
  * I2S cho I2S_SPK_PORT từ trước — hàm này KHÔNG được cài driver lần nữa,
  * chỉ việc bật ampli rồi ghi thẳng dữ liệu vào port đã có sẵn.
  */
 void playBootChime() {
-  Serial.println("[Chime] Playing boot tone (5s)...");
+  Serial.println("[Chime] Playing boot tone (3s)...");
 
   pinMode(I2S_SPK_SD_PIN, OUTPUT);
   digitalWrite(I2S_SPK_SD_PIN, HIGH);  // bật ampli MAX98357
@@ -32,7 +32,7 @@ void playBootChime() {
   }
 
   size_t written;
-  int loops = (AUDIO_SAMPLE_RATE * 5) / bufLen;  // ~5 giây
+  int loops = (AUDIO_SAMPLE_RATE * 3) / bufLen;  // ~3 giây
   for (int i = 0; i < loops; i++) {
     esp_err_t err = i2s_write(I2S_SPK_PORT, buf, sizeof(buf), &written, portMAX_DELAY);
     if (err != ESP_OK) {

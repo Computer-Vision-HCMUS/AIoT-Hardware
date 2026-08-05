@@ -47,7 +47,9 @@ std::vector<Song> g_music_cache;
 std::vector<PodcastEpisode> g_podcast_cache;
 unsigned long g_music_cache_at_ms = 0;
 unsigned long g_podcast_cache_at_ms = 0;
-constexpr unsigned long kMediaCacheTtlMs = 60000;
+// Long TTL: redraw/button handlers hit these constantly; refreshing the library
+// while PCM is buffered OOMs (abort in operator new / PodcastEpisode alloc).
+constexpr unsigned long kMediaCacheTtlMs = 300000;
 constexpr size_t kCheckInInferenceBytes = 2 * AUDIO_SAMPLE_RATE * sizeof(int16_t);
 constexpr size_t kCheckInMinBytes = AUDIO_SAMPLE_RATE * sizeof(int16_t);
 constexpr float kCheckInMinRms = 0.008f;
@@ -186,39 +188,49 @@ std::vector<ActivityCard> getRecommendedActivities(const std::string& emotion) {
 // ─────────────────────────────────────────────────────────────────────────────
 // UC2/UC3 — getRecommendedMusic()
 //
-// Server supplies the recommendation catalog. Playback itself remains local,
-// so the ESP never downloads or streams an audio URL.
-//
-// TODO(ai-integration): use getContentRecommendations(currentEmotion) for the
-//   emotion-personalised shorter list shown on the Discover screen.
+// Returns a reference to the process-wide cache. Callers must not retain the
+// reference across a cache refresh (none today do).
 // ─────────────────────────────────────────────────────────────────────────────
-std::vector<Song> getRecommendedMusic() {
-    if (!g_music_cache.empty() && millis() - g_music_cache_at_ms < kMediaCacheTtlMs) {
+const std::vector<Song>& getRecommendedMusic() {
+    const bool fresh =
+        !g_music_cache.empty() && (millis() - g_music_cache_at_ms < kMediaCacheTtlMs);
+    if (fresh) return g_music_cache;
+
+    // Prefer a slightly stale list over a heap-heavy HTTP+JSON refresh while
+    // the PCM ring buffer / HTTPClient are already using most free DRAM.
+    if (!g_music_cache.empty() && g_audio_manager && g_audio_manager->isStreaming()) {
         return g_music_cache;
     }
 
     if (g_edge_api) {
         std::vector<Song> songs;
         if (g_edge_api->getMusicCatalog(songs) && !songs.empty()) {
-            std::vector<Song> aiSongs;
-            std::vector<PodcastEpisode> ignoredEpisodes;
-            if (g_edge_api->getContentRecommendations(
-                    g_last_media_emotion, aiSongs, ignoredEpisodes)) {
-                for (Song& song : songs) {
-                    song.isAiRecommended = std::any_of(
-                        aiSongs.begin(), aiSongs.end(), [&song](const Song& candidate) {
-                            return candidate.mediaId == song.mediaId;
-                        });
+            // Skip AI tagging when free heap is already low — tagging does
+            // another HTTP round-trip plus temporary vectors and was the
+            // abort() site after a few track changes during PCM playback.
+            if (ESP.getFreeHeap() > 48000) {
+                std::vector<Song> aiSongs;
+                std::vector<PodcastEpisode> ignoredEpisodes;
+                if (g_edge_api->getContentRecommendations(
+                        g_last_media_emotion, aiSongs, ignoredEpisodes)) {
+                    for (Song& song : songs) {
+                        song.isAiRecommended = std::any_of(
+                            aiSongs.begin(), aiSongs.end(), [&song](const Song& candidate) {
+                                return candidate.mediaId == song.mediaId;
+                            });
+                    }
                 }
             }
             std::stable_sort(songs.begin(), songs.end(), [](const Song& left, const Song& right) {
                 return left.isAiRecommended && !right.isAiRecommended;
             });
-            g_music_cache = songs;
+            g_music_cache = std::move(songs);
             g_music_cache_at_ms = millis();
             return g_music_cache;
         }
     }
+
+    if (!g_music_cache.empty()) return g_music_cache;
 
     g_music_cache = {
         { "", "Calm Waves",        "Ambient Studio",   "3:45", true,  "" },
@@ -236,46 +248,52 @@ std::vector<Song> getRecommendedMusic() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UC2/UC3 — getRecommendedPodcast()
-//
-// Server supplies the recommendation catalog. Playback itself remains local,
-// so the ESP never downloads or streams an audio URL.
 // ─────────────────────────────────────────────────────────────────────────────
-std::vector<PodcastEpisode> getRecommendedPodcast() {
-    if (!g_podcast_cache.empty() && millis() - g_podcast_cache_at_ms < kMediaCacheTtlMs) {
+const std::vector<PodcastEpisode>& getRecommendedPodcast() {
+    const bool fresh =
+        !g_podcast_cache.empty() && (millis() - g_podcast_cache_at_ms < kMediaCacheTtlMs);
+    if (fresh) return g_podcast_cache;
+
+    if (!g_podcast_cache.empty() && g_audio_manager && g_audio_manager->isStreaming()) {
         return g_podcast_cache;
     }
 
     if (g_edge_api) {
         std::vector<PodcastEpisode> episodes;
         if (g_edge_api->getPodcastCatalog(episodes) && !episodes.empty()) {
-            std::vector<Song> ignoredSongs;
-            std::vector<PodcastEpisode> aiEpisodes;
-            if (g_edge_api->getContentRecommendations(
-                    g_last_media_emotion, ignoredSongs, aiEpisodes)) {
-                for (PodcastEpisode& episode : episodes) {
-                    episode.isAiRecommended = std::any_of(
-                        aiEpisodes.begin(), aiEpisodes.end(), [&episode](const PodcastEpisode& candidate) {
-                            return candidate.mediaId == episode.mediaId;
-                        });
+            if (ESP.getFreeHeap() > 48000) {
+                std::vector<Song> ignoredSongs;
+                std::vector<PodcastEpisode> aiEpisodes;
+                if (g_edge_api->getContentRecommendations(
+                        g_last_media_emotion, ignoredSongs, aiEpisodes)) {
+                    for (PodcastEpisode& episode : episodes) {
+                        episode.isAiRecommended = std::any_of(
+                            aiEpisodes.begin(), aiEpisodes.end(),
+                            [&episode](const PodcastEpisode& candidate) {
+                                return candidate.mediaId == episode.mediaId;
+                            });
+                    }
                 }
             }
             std::stable_sort(episodes.begin(), episodes.end(),
                              [](const PodcastEpisode& left, const PodcastEpisode& right) {
-                return left.isAiRecommended && !right.isAiRecommended;
-            });
-            g_podcast_cache = episodes;
+                                 return left.isAiRecommended && !right.isAiRecommended;
+                             });
+            g_podcast_cache = std::move(episodes);
             g_podcast_cache_at_ms = millis();
             return g_podcast_cache;
         }
     }
 
+    if (!g_podcast_cache.empty()) return g_podcast_cache;
+
     g_podcast_cache = {
-        { "", "Mindfulness for Beginners", "Calm Daily",        "12:30", true,  "" },
-        { "", "Managing Anxiety",          "Mind & Body Talks", "18:45", false, "" },
-        { "", "Gratitude Journaling",      "Positive Space",    "10:15", true,  "" },
-        { "", "Deep Sleep Techniques",     "Rest Easy Podcast", "22:00", false, "" },
-        { "", "Finding Inner Peace",       "Serenity Now",      "15:30", false, "" },
-        { "", "Overcoming Daily Stress",   "Wellness Weekly",   "19:20", false, "" },
+        { "", "Mindful Mornings",  "Wellness Hub",   "12:30", true,  "" },
+        { "", "Sleep Stories",     "Calm Voices",    "18:05", false, "" },
+        { "", "Focus Booster",     "Productivity",   "15:42", true,  "" },
+        { "", "Breathing Guide",   "Zen Coach",      "8:20",  false, "" },
+        { "", "Evening Wind Down", "Night Radio",    "22:10", false, "" },
+        { "", "Positive Thoughts", "Daily Boost",    "10:55", false, "" },
     };
     g_podcast_cache_at_ms = millis();
     return g_podcast_cache;

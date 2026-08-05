@@ -416,8 +416,21 @@ bool EdgeApiClient::getMusicCatalog(std::vector<Song>& songs) {
     if (!getJson("/api/media/library", response)) return false;
 
     songs.clear();
-    std::vector<PodcastEpisode> ignored;
-    parseMediaLibrary(response, songs, ignored);
+    JsonDocument json;
+    if (deserializeJson(json, response) != DeserializationError::Ok) return false;
+
+    for (JsonObject item : json["music"].as<JsonArray>()) {
+        const String title = item["title"] | "";
+        if (title.isEmpty()) continue;
+        const int durationSec = item["duration_sec"] | 0;
+        char duration[8];
+        snprintf(duration, sizeof(duration), "%d:%02d", durationSec / 60, durationSec % 60);
+        songs.push_back({
+            (const char*)(item["media_id"] | ""), title.c_str(),
+            (const char*)(item["category"] | ""), duration, false,
+            (const char*)(item["source_url"] | ""),
+        });
+    }
     return !songs.empty();
 }
 
@@ -428,8 +441,21 @@ bool EdgeApiClient::getPodcastCatalog(std::vector<PodcastEpisode>& episodes) {
     if (!getJson("/api/media/library", response)) return false;
 
     episodes.clear();
-    std::vector<Song> ignored;
-    parseMediaLibrary(response, ignored, episodes);
+    JsonDocument json;
+    if (deserializeJson(json, response) != DeserializationError::Ok) return false;
+
+    for (JsonObject item : json["podcasts"].as<JsonArray>()) {
+        const String title = item["title"] | "";
+        if (title.isEmpty()) continue;
+        const int durationSec = item["duration_sec"] | 0;
+        char duration[8];
+        snprintf(duration, sizeof(duration), "%d:%02d", durationSec / 60, durationSec % 60);
+        episodes.push_back({
+            (const char*)(item["media_id"] | ""), title.c_str(),
+            (const char*)(item["category"] | ""), duration, false,
+            (const char*)(item["source_url"] | ""),
+        });
+    }
     return !episodes.empty();
 }
 

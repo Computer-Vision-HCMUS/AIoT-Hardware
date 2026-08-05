@@ -61,8 +61,8 @@ void drawDiscoverScreen(DisplayController& display, const AppState& state) {
 
     // ---- Menu: Music / Podcast ----
     static const char* kItems[] = { "Music", "Podcast" };
-    const auto songs = getRecommendedMusic();
-    const auto episodes = getRecommendedPodcast();
+    const auto& songs = getRecommendedMusic();
+    const auto& episodes = getRecommendedPodcast();
     const uint8_t musicAiCount = static_cast<uint8_t>(std::count_if(
         songs.begin(), songs.end(), [](const Song& song) { return song.isAiRecommended; }));
     const uint8_t podcastAiCount = static_cast<uint8_t>(std::count_if(
