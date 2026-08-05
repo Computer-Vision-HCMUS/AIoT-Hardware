@@ -99,7 +99,8 @@ public:
      */
     bool getContentRecommendations(const String& emotion,
                                    std::vector<Song>& songs,
-                                   std::vector<PodcastEpisode>& episodes);
+                                   std::vector<PodcastEpisode>& episodes,
+                                   const char* mediaType = "both");
 
     // ── UC3 — Full catalog ────────────────────────────────────────────────
 

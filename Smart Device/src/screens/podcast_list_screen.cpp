@@ -47,7 +47,7 @@ void drawPodcastListScreen(DisplayController& display, const AppState& state) {
     const auto& episodes = getRecommendedPodcast();
     const uint8_t total = (uint8_t)episodes.size();
 
-    UICommon::drawScreenFrame(display, "Podcast", "All episodes - AI marked");
+    UICommon::drawScreenFrame(display, "Podcast", "40 episodes - AI picks first");
 
     constexpr uint8_t kVisible = 4;
     const uint16_t startY = 50;

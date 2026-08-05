@@ -411,13 +411,14 @@ void EdgeApiClient::parseMediaLibrary(const String& response,
 
 bool EdgeApiClient::getContentRecommendations(const String& emotion,
                                               std::vector<Song>& songs,
-                                              std::vector<PodcastEpisode>& episodes) {
+                                              std::vector<PodcastEpisode>& episodes,
+                                              const char* mediaType) {
     String label = emotion;
     label.toLowerCase();
 
     JsonDocument req;
     req["emotion_label"] = label;
-    req["media_type"]    = "both";
+    req["media_type"]    = mediaType;
 
     String payload;
     serializeJson(req, payload);

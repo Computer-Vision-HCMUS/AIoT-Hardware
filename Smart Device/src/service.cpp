@@ -212,7 +212,7 @@ const std::vector<Song>& getRecommendedMusic() {
                 std::vector<Song> aiSongs;
                 std::vector<PodcastEpisode> ignoredEpisodes;
                 if (g_edge_api->getContentRecommendations(
-                        g_last_media_emotion, aiSongs, ignoredEpisodes)) {
+                        g_last_media_emotion, aiSongs, ignoredEpisodes, "song")) {
                     for (Song& song : songs) {
                         song.isAiRecommended = std::any_of(
                             aiSongs.begin(), aiSongs.end(), [&song](const Song& candidate) {
@@ -265,7 +265,7 @@ const std::vector<PodcastEpisode>& getRecommendedPodcast() {
                 std::vector<Song> ignoredSongs;
                 std::vector<PodcastEpisode> aiEpisodes;
                 if (g_edge_api->getContentRecommendations(
-                        g_last_media_emotion, ignoredSongs, aiEpisodes)) {
+                        g_last_media_emotion, ignoredSongs, aiEpisodes, "podcast")) {
                     for (PodcastEpisode& episode : episodes) {
                         episode.isAiRecommended = std::any_of(
                             aiEpisodes.begin(), aiEpisodes.end(),
@@ -378,6 +378,14 @@ bool confirmCheckInEmotion(const std::string& label, uint8_t confidence, bool& s
     }
     output.close();
 
+    // Refresh the catalog ordering after the user confirms a new emotion.
+    g_last_media_emotion = label.c_str();
+    g_last_media_emotion.toLowerCase();
+    g_music_cache.clear();
+    g_podcast_cache.clear();
+    g_music_cache_at_ms = 0;
+    g_podcast_cache_at_ms = 0;
+
     // Do not issue an HTTP request unless Wi-Fi and pairing are both ready.
     if (g_edge_api != nullptr && g_edge_api->canSync()) {
         String sessionId;
@@ -398,6 +406,8 @@ bool loadConfirmedEmotion(std::string& label, uint8_t& confidence) {
     if (error || !document["label"].is<const char*>()) return false;
     label = document["label"].as<const char*>();
     confidence = document["confidence"] | 0;
+    g_last_media_emotion = label.c_str();
+    g_last_media_emotion.toLowerCase();
     return !label.empty();
 }
 

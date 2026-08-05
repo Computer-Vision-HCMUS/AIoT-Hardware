@@ -47,7 +47,7 @@ void drawMusicListScreen(DisplayController& display, const AppState& state) {
     const auto& songs = getRecommendedMusic();
     const uint8_t total = (uint8_t)songs.size();
 
-    UICommon::drawScreenFrame(display, "Music", "All tracks - AI marked");
+    UICommon::drawScreenFrame(display, "Music", "40 tracks - AI picks first");
 
     // Scroll window: show 4 items at a time
     constexpr uint8_t kVisible = 4;
