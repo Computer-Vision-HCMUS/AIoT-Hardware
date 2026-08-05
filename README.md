@@ -5,6 +5,12 @@ Firmware cho thiết bị **EmotiCare** chạy trên ESP32. Thiết bị cung c�
 > [!IMPORTANT]
 > Repository hiện chứa một firmware PlatformIO tại [`Smart Device`](./Smart%20Device). Thay đổi chân GPIO trong [`pins_config.h`](./Smart%20Device/include/pins_config.h) trước khi nạp firmware vào phần cứng có wiring khác.
 
+## Demo
+
+Ảnh demo thiết bị EmotiCare trên phần cứng thật:
+
+![Demo EmotiCare trên ESP32](./image%20demo.jpg)
+
 ## Tính năng
 
 - Giao diện EmotiCare trên màn hình **ST7789 240 × 280** và điều hướng bằng 5 nút vật lý.
@@ -33,6 +39,7 @@ Tất cả chân GPIO được khai báo tập trung tại [`Smart Device/includ
 ```text
 AIoT-Hardware/
 ├── README.md
+├── image demo.jpg              # Ảnh demo trên phần cứng
 └── Smart Device/
     ├── platformio.ini          # Môi trường PlatformIO và thư viện
     ├── include/                # Header, cấu hình GPIO và interface

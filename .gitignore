@@ -23,6 +23,13 @@ dist/
 *.elf
 *.map
 
+# Large media demos (keep lightweight images in README)
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+
 # Object files and archives
 *.obj
 *.lib
