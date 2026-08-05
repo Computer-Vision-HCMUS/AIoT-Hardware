@@ -86,6 +86,29 @@ bool DemoApp::init() {
         network_->begin();
         edge_api_ = new EdgeApiClient(*network_);
         serviceConfigureEdgeApi(edge_api_);
+
+        // A successful Wi-Fi join is not enough to consider the device online:
+        // verify the saved pairing token with the server on every boot.  The
+        // heartbeat also updates the device's last-seen state server-side.
+        if (network_->isConnected()) {
+            if (network_->isPaired()) {
+                Serial.println("[Boot] Wi-Fi connected; checking paired server...");
+                if (edge_api_->heartbeat()) {
+                    Serial.println("[Boot] Server heartbeat OK");
+                } else {
+                    Serial.println("[Boot] Server heartbeat FAILED");
+                }
+            } else if (!network_->serverBaseUrl().isEmpty()) {
+                Serial.println("[Boot] Wi-Fi connected; device is unpaired, checking server...");
+                if (edge_api_->healthCheck()) {
+                    Serial.println("[Boot] Server reachable; complete pairing in Wi-Fi Setup");
+                } else {
+                    Serial.println("[Boot] Server health check FAILED");
+                }
+            } else {
+                Serial.println("[Boot] Wi-Fi connected; no server pairing is configured");
+            }
+        }
     }
 
     // AudioManager: init I2S drivers.

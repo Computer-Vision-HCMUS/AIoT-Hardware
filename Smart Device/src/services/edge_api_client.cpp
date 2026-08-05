@@ -136,8 +136,30 @@ bool EdgeApiClient::getJson(const char* path, String& response) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 bool EdgeApiClient::healthCheck() {
+    // This endpoint is intentionally unauthenticated.  Keep it separate from
+    // getJson(), whose isReady() guard requires a paired device, so it can be
+    // used to diagnose a server before pairing has completed.
+    if (!network_.isConnected() || network_.serverBaseUrl().isEmpty()) {
+        return false;
+    }
+
+    const String url = network_.serverBaseUrl() + "/";
     String response;
-    return getJson("/", response);
+
+    HTTPClient http;
+    http.setTimeout(8000);
+    if (!http.begin(url)) {
+        Serial.printf("[EdgeAPI] Health check could not open %s\n", url.c_str());
+        return false;
+    }
+
+    const int status = http.GET();
+    if (status >= 200 && status < 300) {
+        response = http.getString();
+    }
+    http.end();
+
+    return status >= 200 && status < 300;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
