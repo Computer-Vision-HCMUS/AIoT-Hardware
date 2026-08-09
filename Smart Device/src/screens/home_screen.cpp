@@ -28,35 +28,36 @@ void drawHomeScreen(DisplayController& display, const AppState& state) {
     // ---- Background & title ----
     display.setBackgroundColor(10, 15, 25);
     display.clear();
+    UICommon::drawScreenBorder(display);
 
     display.setColor(255, 255, 255);
-    display.drawText(6, 6, "EmotiCare", 2);
+    display.drawText(UICommon::kCornerTextPadding, 10, "EmotiCare", 2);
 
-    UICommon::drawDivider(display, 28);
+    UICommon::drawDivider(display, 31);
 
     // ---- Status strip ----
     // Network status is supplied by NetworkManager (Online / Setup AP / Offline).
     const bool online = state.sharedContext.deviceStatus == "Online";
     display.setColor(online ? 80 : 210, online ? 200 : 150, online ? 100 : 70);
-    display.drawText(6, 33, "WiFi", 1);
+    display.drawText(14, 36, "WiFi", 1);
     display.setColor(50, 70, 90);
-    display.drawText(30, 33, "|", 1);
+    display.drawText(38, 36, "|", 1);
     display.setColor(online ? 100 : 240, online ? 220 : 180, online ? 120 : 90);
-    display.drawText(38, 33, state.sharedContext.deviceStatus, 1);
+    display.drawText(46, 36, state.sharedContext.deviceStatus, 1);
 
     // Separator between WiFi and emotion
     display.setColor(50, 70, 90);
-    display.drawText(88, 33, "|", 1);
+    display.drawText(96, 36, "|", 1);
 
     // Current emotion
     display.setColor(160, 170, 190);
-    display.drawText(96, 33, "Mood:", 1);
+    display.drawText(104, 36, "Mood:", 1);
 
     if (state.sharedContext.lastEmotion.empty() ||
         state.sharedContext.lastEmotion == "Neutral") {
         // Not yet checked in
         display.setColor(100, 110, 130);
-        display.drawText(134, 33, "None", 1);
+        display.drawText(142, 36, "None", 1);
     } else {
         // Emotion detected after check-in
         char buf[32];
@@ -64,10 +65,10 @@ void drawHomeScreen(DisplayController& display, const AppState& state) {
                  state.sharedContext.lastEmotion.c_str(),
                  state.sharedContext.confidence);
         display.setColor(255, 210, 70);
-        display.drawText(134, 33, buf, 1);
+        display.drawText(142, 36, buf, 1);
     }
 
-    UICommon::drawDivider(display, 47);
+    UICommon::drawDivider(display, 50);
 
     // ---- Menu items ----
     static const char* kMenuItems[] = {
@@ -81,7 +82,7 @@ void drawHomeScreen(DisplayController& display, const AppState& state) {
     };
     constexpr uint8_t kCount = 7;
 
-    const uint16_t startY = 52;
+    const uint16_t startY = 55;
     const uint16_t itemH  = 24;   // 6 x 24 = 144px, ends at y=196, footer at y=250
     const uint16_t W      = display.getWidth();
 
@@ -91,15 +92,15 @@ void drawHomeScreen(DisplayController& display, const AppState& state) {
 
         if (selected) {
             display.setColor(28, 58, 112);
-            display.drawRectangle(0, y, W, itemH, true);
+            display.drawRoundedRectangle(6, y, W - 12, itemH, 6, true);
             display.setColor(80, 160, 255);
-            display.drawRectangle(0, y, 4, itemH, true);
+            display.drawRectangle(8, y + 4, 3, itemH - 8, true);
             display.setColor(255, 255, 255);
         } else {
             display.setColor(85, 105, 135);
         }
 
-        display.drawText(10, y + 10, kMenuItems[i], 1);
+        display.drawText(UICommon::kScreenPadding, y + 9, kMenuItems[i], 1);
     }
 
     // ---- Button legend ----

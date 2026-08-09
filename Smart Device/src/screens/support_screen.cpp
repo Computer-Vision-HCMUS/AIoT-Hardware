@@ -112,10 +112,11 @@ void drawSupportScreen(DisplayController& display, const AppState& state) {
             const uint16_t y = 70 + row * 40;
             display.setColor(selected ? 25 : 14, selected ? 55 : 20,
                              selected ? 95 : 30);
-            display.drawRectangle(4, y, display.getWidth() - 8, 36, true);
+            display.drawRoundedRectangle(6, y, display.getWidth() - 12,
+                                         36, 6, true);
             if (selected) {
                 display.setColor(80, 160, 255);
-                display.drawRectangle(4, y, 4, 36, true);
+                display.drawRectangle(8, y + 4, 3, 28, true);
             }
 
             UICommon::drawLabel(display, 14, y + 11,
@@ -126,7 +127,9 @@ void drawSupportScreen(DisplayController& display, const AppState& state) {
 
         snprintf(info, sizeof(info), "%u / %u",
                  state.supportActivityIndex + 1, total);
-        UICommon::drawLabel(display, 196, 52, info, 1, 100, 130, 160);
+        display.setColor(100, 130, 160);
+        display.drawTextRightAligned(display.getWidth() - UICommon::kScreenPadding,
+                                     52, info, 1);
     }
 
     UICommon::drawButtonLegend(display,

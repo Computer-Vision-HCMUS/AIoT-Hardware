@@ -47,7 +47,7 @@ void drawMusicListScreen(DisplayController& display, const AppState& state) {
     const auto& songs = getRecommendedMusic();
     const uint8_t total = (uint8_t)songs.size();
 
-    UICommon::drawScreenFrame(display, "Music", "40 tracks - AI picks first");
+    UICommon::drawScreenFrame(display, "Music", "AI picks first");
 
     // Scroll window: show 4 items at a time
     constexpr uint8_t kVisible = 4;
@@ -72,21 +72,22 @@ void drawMusicListScreen(DisplayController& display, const AppState& state) {
         // Row background
         if (selected) {
             display.setColor(25, 55, 95);
-            display.drawRectangle(0, y, W, itemH, true);
+            display.drawRoundedRectangle(6, y, W - 12, itemH - 2, 6, true);
             display.setColor(80, 160, 255);
-            display.drawRectangle(0, y, 4, itemH, true);
+            display.drawRectangle(8, y + 4, 3, itemH - 10, true);
         } else {
             display.setColor(14, 20, 30);
-            display.drawRectangle(0, y, W, itemH, true);
+            display.drawRoundedRectangle(6, y, W - 12, itemH - 2, 6, true);
         }
 
         // AI-recommended badge + distinct colour
         if (song.isAiRecommended) {
             // Gold [AI] badge background
             display.setColor(180, 130, 0);
-            display.drawRectangle(W - 26, y + 6, 22, 12, true);
+            display.drawRoundedRectangle(W - UICommon::kScreenPadding - 22,
+                                         y + 6, 22, 12, 3, true);
             display.setColor(255, 240, 0);
-            display.drawText(W - 24, y + 8, "AI", 1);
+            display.drawText(W - UICommon::kScreenPadding - 20, y + 8, "AI", 1);
 
             // Title in bright cyan
             display.setColor(0, 220, 200);
@@ -97,12 +98,12 @@ void drawMusicListScreen(DisplayController& display, const AppState& state) {
         }
 
         // Song title
-        display.drawText(8, y + 5,
+        display.drawText(UICommon::kScreenPadding, y + 5,
                          truncateForTft(song.title, song.isAiRecommended ? 31 : 37), 1);
 
         // Artist + duration (muted)
         display.setColor(100, 120, 145);
-        display.drawText(8, y + 21,
+        display.drawText(UICommon::kScreenPadding, y + 21,
                          truncateForTft(categoryLabel(song.artist) + " | " + song.duration, 37), 1);
     }
 
@@ -110,7 +111,16 @@ void drawMusicListScreen(DisplayController& display, const AppState& state) {
     if (total > 0) {
         char info[24];
         snprintf(info, sizeof(info), "%u / %u", state.musicScrollIndex + 1, total);
-        UICommon::drawLabel(display, W - 36, 34, info, 1, 100, 130, 160);
+        display.setColor(100, 130, 160);
+        display.drawTextRightAligned(W - UICommon::kScreenPadding, 34, info, 1);
+    }
+
+    if (!state.sharedContext.mediaPlaying && state.sharedContext.mediaStatus.empty()) {
+        UICommon::drawLabel(display, UICommon::kScreenPadding, display.getHeight() - 44,
+                            "Stopped - choose track, then PLAY", 1, 100, 130, 160);
+    } else if (!state.sharedContext.mediaStatus.empty()) {
+        UICommon::drawLabel(display, UICommon::kScreenPadding, display.getHeight() - 44,
+                            state.sharedContext.mediaStatus.c_str(), 1, 0, 220, 200);
     }
 
     UICommon::drawButtonLegend(display,
@@ -119,14 +129,6 @@ void drawMusicListScreen(DisplayController& display, const AppState& state) {
         /*S3*/ "PLAY",
         /*S4*/ "DOWN",
         /*S5*/ "UP/BCK");
-
-    if (!state.sharedContext.mediaPlaying && state.sharedContext.mediaStatus.empty()) {
-        UICommon::drawLabel(display, 4, display.getHeight() - 42,
-                            "Stopped - choose a track and press PLAY", 1, 100, 130, 160);
-    } else if (!state.sharedContext.mediaStatus.empty()) {
-        UICommon::drawLabel(display, 4, display.getHeight() - 42,
-                            state.sharedContext.mediaStatus.c_str(), 1, 0, 220, 200);
-    }
 }
 
 }  // namespace ScreenHandlers

@@ -28,37 +28,38 @@ void drawMicTestScreen(DisplayController& display, const AppState& state) {
     // ── Background & Title ──
     display.setBackgroundColor(8, 12, 20);
     display.clear();
+    UICommon::drawScreenBorder(display);
 
     display.setColor(255, 255, 255);
-    display.drawText(6, 6, "Test Mic", 2);
+    display.drawText(UICommon::kCornerTextPadding, 10, "Test Mic", 2);
 
-    UICommon::drawDivider(display, 28);
+    UICommon::drawDivider(display, 31);
 
     display.setColor(130, 150, 180);
-    display.drawText(6, 33, "Speak into mic — hear it live", 1);
+    display.drawText(UICommon::kScreenPadding, 36, "Speak into mic — hear it live", 1);
 
-    UICommon::drawDivider(display, 46);
+    UICommon::drawDivider(display, 49);
 
     // ── VU Meter ──
-    const uint16_t meterX = 8;
-    const uint16_t meterY = 62;
-    const uint16_t meterW = W - 16;   // 224px wide
+    const uint16_t meterX = UICommon::kScreenPadding;
+    const uint16_t meterY = 65;
+    const uint16_t meterW = W - 2 * UICommon::kScreenPadding;
     const uint16_t meterH = 32;
 
     const uint16_t peak = state.sharedContext.micPeakLevel;  // 0–100
 
     // Label + percentage
     display.setColor(120, 145, 175);
-    display.drawText(meterX, 52, "Volume", 1);
+    display.drawText(meterX, 55, "Volume", 1);
 
     char pctBuf[8];
     snprintf(pctBuf, sizeof(pctBuf), "%3u%%", peak);
     display.setColor(200, 215, 240);
-    display.drawText(W - 34, 52, pctBuf, 1);
+    display.drawTextRightAligned(W - UICommon::kScreenPadding, 55, pctBuf, 1);
 
     // Meter background (dark rail)
     display.setColor(22, 32, 48);
-    display.drawRectangle(meterX, meterY, meterW, meterH, true);
+    display.drawRoundedRectangle(meterX, meterY, meterW, meterH, 6, true);
 
     // Filled bar — color shifts green→yellow→red with level
     if (peak > 0) {
@@ -71,7 +72,7 @@ void drawMicTestScreen(DisplayController& display, const AppState& state) {
         else                { r = 255; g =  50; b =  30; }  // Red (clipping)
 
         display.setColor(r, g, b);
-        display.drawRectangle(meterX, meterY, fillW, meterH, true);
+        display.drawRoundedRectangle(meterX, meterY, fillW, meterH, 6, true);
     }
 
     // Tick marks at 25%, 50%, 75%
@@ -84,7 +85,7 @@ void drawMicTestScreen(DisplayController& display, const AppState& state) {
 
     // Meter border (subtle)
     display.setColor(40, 60, 88);
-    display.drawRectangle(meterX, meterY, meterW, meterH, false);
+    display.drawRoundedRectangle(meterX, meterY, meterW, meterH, 6, false);
 
     // ── Status info ──
     const bool active = state.sharedContext.audioActive;
@@ -92,13 +93,14 @@ void drawMicTestScreen(DisplayController& display, const AppState& state) {
     display.setColor(active ? 80 : 140,
                      active ? 220 : 150,
                      active ? 110 : 160);
-    display.drawText(6, 104, active ? "Status : Listening..." : "Status : Starting...", 1);
+    display.drawText(UICommon::kScreenPadding, 107,
+                     active ? "Status: Listening..." : "Status: Starting...", 1);
 
     display.setColor(70, 90, 115);
-    display.drawText(6, 120, "Mic    : INMP441  (I2S1 / GPIO 22,21,35)", 1);
-    display.drawText(6, 136, "Amp    : MAX98357 (I2S0 / GPIO 25,32,33)", 1);
-    display.drawText(6, 152, "Rate   : 16 kHz  |  Depth : 16-bit", 1);
-    display.drawText(6, 168, "Latency: ~32 ms per DMA buffer", 1);
+    display.drawText(UICommon::kScreenPadding, 123, "Mic: INMP441 I2S1 GPIO 22/21/35", 1);
+    display.drawText(UICommon::kScreenPadding, 139, "Amp: MAX98357 I2S0 GPIO 25/32/33", 1);
+    display.drawText(UICommon::kScreenPadding, 155, "Rate: 16 kHz | Depth: 16-bit", 1);
+    display.drawText(UICommon::kScreenPadding, 171, "Latency: ~32 ms / DMA buffer", 1);
 
     // ── Button legend ──
     UICommon::drawButtonLegend(display,

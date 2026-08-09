@@ -7,12 +7,18 @@
 #include "pins_config.h"
 #include <TFT_eSPI.h>
 #include <Arduino.h>
+#include <algorithm>
 #include <cstdio>
 
 // Global TFT instance for TFT_eSPI library
 static TFT_eSPI tft = TFT_eSPI();
 
 namespace {
+constexpr uint16_t kTextLeftInset = 14;
+constexpr uint16_t kTextRightInset = 14;
+constexpr uint16_t kTextTopInset = 10;
+constexpr uint16_t kTextBottomInset = 10;
+
 uint32_t readUtf8Codepoint(const std::string& text, size_t& index) {
     const uint8_t first = static_cast<uint8_t>(text[index++]);
     if (first < 0x80) return first;
@@ -81,6 +87,29 @@ std::string toTftText(const std::string& text) {
                                    : latinFallback(codepoint);
     }
     return result;
+}
+
+std::string fitTextToWidth(std::string text, int16_t maxWidth) {
+    if (maxWidth <= 0 || text.empty()) return {};
+    if (tft.textWidth(text.c_str()) <= maxWidth) return text;
+
+    static constexpr const char* kEllipsis = "...";
+    const int16_t ellipsisWidth = tft.textWidth(kEllipsis);
+    if (ellipsisWidth > maxWidth) {
+        while (!text.empty() && tft.textWidth(text.c_str()) > maxWidth) {
+            text.pop_back();
+        }
+        return text;
+    }
+
+    while (!text.empty()) {
+        text.pop_back();
+        if (tft.textWidth(text.c_str()) + ellipsisWidth <= maxWidth) {
+            text += kEllipsis;
+            return text;
+        }
+    }
+    return kEllipsis;
 }
 }  // namespace
 
@@ -177,16 +206,51 @@ void DisplayController::drawText(uint16_t x, uint16_t y, const std::string& text
     if (fontSize < 1) fontSize = 1;
     if (fontSize > 3) fontSize = 3;  // Limit to 3
 
-    // Set text size and position
+    // Keep text on one line and inside the rounded screen frame. Long dynamic
+    // values are shortened instead of wrapping into the footer or border.
     tft.setTextSize(fontSize);
-    tft.setCursor(x, y);
+    tft.setTextWrap(false, false);
+
+    const uint16_t safeX = std::max<uint16_t>(x, kTextLeftInset);
+    const uint16_t textHeight = static_cast<uint16_t>(tft.fontHeight());
+    const uint16_t maxY = height_ > kTextBottomInset + textHeight
+        ? height_ - kTextBottomInset - textHeight
+        : kTextTopInset;
+    const uint16_t safeY = std::max<uint16_t>(y, kTextTopInset);
+    if (safeY > maxY) return;
+    if (safeX >= width_ - kTextRightInset) return;
 
     // TFT_eSPI's built-in GLCD font is ASCII-only. Convert Vietnamese UTF-8
     // to readable Latin characters instead of rendering each UTF-8 byte as a
     // corrupt glyph.
-    const std::string displayText = toTftText(text);
+    const int16_t maxWidth = static_cast<int16_t>(width_ - kTextRightInset - safeX);
+    const std::string displayText = fitTextToWidth(toTftText(text), maxWidth);
+    if (displayText.empty()) return;
+
+    tft.setCursor(safeX, safeY);
     tft.print(displayText.c_str());
     delay(2);
+}
+
+void DisplayController::drawTextRightAligned(uint16_t rightX, uint16_t y,
+                                             const std::string& text,
+                                             uint8_t fontSize) {
+    if (!initialized_) return;
+    if (fontSize < 1) fontSize = 1;
+    if (fontSize > 3) fontSize = 3;
+
+    tft.setTextSize(fontSize);
+    const uint16_t safeRight = std::min<uint16_t>(
+        rightX, width_ - kTextRightInset);
+    if (safeRight <= kTextLeftInset) return;
+
+    const int16_t availableWidth = static_cast<int16_t>(safeRight - kTextLeftInset);
+    const std::string displayText = fitTextToWidth(toTftText(text), availableWidth);
+    if (displayText.empty()) return;
+
+    const int16_t textWidth = tft.textWidth(displayText.c_str());
+    const uint16_t x = safeRight - static_cast<uint16_t>(textWidth);
+    drawText(x, y, displayText, fontSize);
 }
 
 void DisplayController::drawRectangle(uint16_t x, uint16_t y, uint16_t width, uint16_t height, bool filled) {
@@ -198,6 +262,23 @@ void DisplayController::drawRectangle(uint16_t x, uint16_t y, uint16_t width, ui
         tft.fillRect(x, y, width, height, color);
     } else {
         tft.drawRect(x, y, width, height, color);
+    }
+}
+
+void DisplayController::drawRoundedRectangle(uint16_t x, uint16_t y,
+                                             uint16_t width, uint16_t height,
+                                             uint16_t radius, bool filled) {
+    if (!initialized_ || width == 0 || height == 0) return;
+
+    const uint16_t maxRadius = static_cast<uint16_t>(
+        std::min<uint16_t>(width, height) / 2U);
+    radius = std::min(radius, maxRadius);
+    const uint16_t color = tft.color565(text_color_r_, text_color_g_, text_color_b_);
+
+    if (filled) {
+        tft.fillRoundRect(x, y, width, height, radius, color);
+    } else {
+        tft.drawRoundRect(x, y, width, height, radius, color);
     }
 }
 

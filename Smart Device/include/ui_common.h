@@ -10,6 +10,12 @@ class DisplayController;
 
 namespace UICommon {
 
+// Keep interactive content away from the TFT's rounded/bezel-covered edges.
+constexpr uint16_t kScreenPadding = 14;
+constexpr uint16_t kCornerTextPadding = 24;
+constexpr uint16_t kFrameInset = 2;
+constexpr uint16_t kFrameRadius = 40;
+
 // Basic primitives
 void drawLabel(DisplayController& display, uint16_t x, uint16_t y,
                const std::string& text, uint8_t fontSize,
@@ -32,6 +38,9 @@ void drawButtonLegend(DisplayController& display,
 
 // Legacy single-string hint bar (kept for compatibility)
 void drawHintBar(DisplayController& display, const std::string& hintText);
+
+// Rounded outline for the physical screen safe area.
+void drawScreenBorder(DisplayController& display);
 
 // Full screen frame: clear + title + subtitle + divider (NO legend — call drawButtonLegend after)
 void drawScreenFrame(DisplayController& display,

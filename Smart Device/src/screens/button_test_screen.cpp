@@ -11,12 +11,13 @@ void drawButtonTestScreen(DisplayController& display, const AppState& state) {
         const uint16_t y = 55 + i * 31;
         const bool active = state.sharedContext.buttonPressed[i];
         display.setColor(active ? 30 : 20, active ? 120 : 35, active ? 70 : 55);
-        display.drawRectangle(6, y, 228, 25, true);
+        display.drawRoundedRectangle(6, y, display.getWidth() - 12, 25, 6, true);
         display.setColor(active ? 120 : 170, active ? 255 : 190, active ? 160 : 220);
-        display.drawText(12, y + 8, kNames[i], 1);
+        display.drawText(UICommon::kScreenPadding, y + 8, kNames[i], 1);
         char count[20];
         snprintf(count, sizeof(count), "#%lu", static_cast<unsigned long>(state.sharedContext.buttonPressCounts[i]));
-        display.drawText(183, y + 8, count, 1);
+        display.drawTextRightAligned(display.getWidth() - UICommon::kScreenPadding,
+                                     y + 8, count, 1);
     }
     char last[24];
     snprintf(last, sizeof(last), "Last input: S%u", state.sharedContext.lastButtonId + 1);
