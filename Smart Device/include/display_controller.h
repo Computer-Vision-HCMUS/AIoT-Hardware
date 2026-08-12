@@ -58,6 +58,12 @@ public:
     void drawText(uint16_t x, uint16_t y, const std::string& text, uint8_t fontSize = 2);
 
     /**
+     * @brief Draw text with its right edge aligned to a coordinate
+     */
+    void drawTextRightAligned(uint16_t rightX, uint16_t y,
+                              const std::string& text, uint8_t fontSize = 2);
+
+    /**
      * @brief Draw a filled rectangle
      * @param x X coordinate
      * @param y Y coordinate
@@ -66,6 +72,13 @@ public:
      * @param filled True to fill, false for outline
      */
     void drawRectangle(uint16_t x, uint16_t y, uint16_t width, uint16_t height, bool filled = true);
+
+    /**
+     * @brief Draw a rounded rectangle
+     */
+    void drawRoundedRectangle(uint16_t x, uint16_t y, uint16_t width,
+                              uint16_t height, uint16_t radius,
+                              bool filled = true);
 
     /**
      * @brief Clear the entire display with background color
