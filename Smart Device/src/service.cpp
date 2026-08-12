@@ -102,6 +102,7 @@ std::vector<ActivityCard> getRecommendedActivities(const std::string& emotion) {
         card.description = "Write one short note about what made today feel lighter.";
     } else {
         card.title       = "Breathing & Light Stretch";
+        card.title       = " - Notice: Internet required for this feature to function optimally";
         card.description = "Take 5 deep breaths, then do a 3-minute gentle stretch.";
     }
     activities.push_back(card);

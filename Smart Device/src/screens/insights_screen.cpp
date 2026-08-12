@@ -51,6 +51,70 @@ static void drawStatBar(DisplayController& display,
     display.drawText(barX + barW + 4, y, buf, 1);
 }
 
+static void drawAiAssessment(DisplayController& display,
+                             const std::string& assessment,
+                             const char* period) {
+    constexpr uint16_t kTextLeft = 4;
+    constexpr uint16_t kTextRight = 4;
+    constexpr uint8_t kGlyphWidth = 5;  // font size 1
+    const size_t charsPerLine =
+        (display.getWidth() - kTextLeft - kTextRight) / kGlyphWidth;
+    constexpr uint8_t kMaxLines = 10;
+    std::string line;
+    uint16_t y = 92;
+    uint8_t lines = 0;
+    size_t start = 0;
+
+    char title[36];
+    snprintf(title, sizeof(title), "AI assessment - %s", period);
+    UICommon::drawLabel(display, UICommon::kScreenPadding, 74,
+                        title, 1, 110, 190, 255);
+
+    while (start < assessment.size() && lines < kMaxLines) {
+        while (start < assessment.size() && assessment[start] == ' ') ++start;
+        if (start >= assessment.size()) break;
+        size_t end = assessment.find(' ', start);
+        if (end == std::string::npos) end = assessment.size();
+        std::string word = assessment.substr(start, end - start);
+
+        while (word.size() > charsPerLine && lines < kMaxLines) {
+            if (!line.empty()) {
+                display.setColor(224, 230, 242);
+                display.drawText(kTextLeft, y, line.c_str(), 1);
+                y += 14;
+                ++lines;
+                line.clear();
+            }
+            if (lines >= kMaxLines) break;
+            display.setColor(224, 230, 242);
+            display.drawText(kTextLeft, y, word.substr(0, charsPerLine).c_str(), 1);
+            y += 14;
+            ++lines;
+            word.erase(0, charsPerLine);
+        }
+        if (lines >= kMaxLines) break;
+        if (!word.empty() && !line.empty() &&
+            line.size() + 1 + word.size() > charsPerLine) {
+            display.setColor(224, 230, 242);
+            display.drawText(kTextLeft, y, line.c_str(), 1);
+            y += 14;
+            ++lines;
+            line.clear();
+        }
+        if (lines >= kMaxLines) break;
+        if (!word.empty()) {
+            if (!line.empty()) line += ' ';
+            line += word;
+        }
+        start = end + 1;
+    }
+
+    if (!line.empty() && lines < kMaxLines) {
+        display.setColor(224, 230, 242);
+        display.drawText(kTextLeft, y, line.c_str(), 1);
+    }
+}
+
 void drawInsightsScreen(DisplayController& display, const AppState& state) {
     if (!display.isReady()) return;
 
