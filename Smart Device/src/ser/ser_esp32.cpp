@@ -1,6 +1,6 @@
 #include "ser/ser_esp32.h"
 
-#include "ser/classify.h"
+#include "classifier.h"
 
 #include <algorithm>
 #include <cmath>
@@ -10,12 +10,27 @@ namespace aiot::ser::esp32 {
 
 Prediction classify_features(const float features[kFeatureCount]) {
     static constexpr const char* kLabels[kClassCount] = {
-        "angry", "calm", "disgust", "fearful", "happy", "neutral", "sad", "surprised"};
+        "angry", "disgust", "fear", "happy", "neutral", "sad", "surprise"};
+
+    int16_t model_features[kFeatureCount];
+
+    for (int i = 0; i < kFeatureCount; ++i) {
+        model_features[i] = static_cast<int16_t>(features[i]);
+    }
+
     Prediction prediction{};
-    prediction.class_index = rf_predict(features, kFeatureCount);
-    rf_predict_proba(features, kFeatureCount, prediction.probabilities, kClassCount);
+    prediction.class_index = rf_predict(model_features, kFeatureCount);
+    rf_predict_proba(
+        model_features,
+        kFeatureCount,
+        prediction.probabilities,
+        kClassCount
+    );
+
     prediction.label = kLabels[prediction.class_index];
-    prediction.confidence = prediction.probabilities[prediction.class_index];
+    prediction.confidence =
+        prediction.probabilities[prediction.class_index];
+
     return prediction;
 }
 

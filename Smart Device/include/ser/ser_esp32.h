@@ -7,7 +7,7 @@
 namespace aiot::ser::esp32 {
 
 constexpr int kFeatureCount = 45;
-constexpr int kClassCount = 8;
+constexpr int kClassCount = 7;
 constexpr int kFftSize = 2048;
 constexpr int kSpectrumBins = kFftSize / 2 + 1;
 
