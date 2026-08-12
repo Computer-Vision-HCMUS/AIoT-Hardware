@@ -66,7 +66,7 @@ static void drawAiAssessment(DisplayController& display,
 
     char title[36];
     snprintf(title, sizeof(title), "AI assessment - %s", period);
-    UICommon::drawLabel(display, UICommon::kScreenPadding, 74,
+    UICommon::drawLabel(display, kTextLeft, 74,
                         title, 1, 110, 190, 255);
 
     while (start < assessment.size() && lines < kMaxLines) {
