@@ -55,40 +55,61 @@ static void drawStatBar(DisplayController& display,
 static void drawAiAssessment(DisplayController& display,
                              const std::string& assessment,
                              const char* period) {
-    char title[36];
-    snprintf(title, sizeof(title), "AI assessment - %s", period);
-    UICommon::drawLabel(display, UICommon::kScreenPadding, 74,
-                        title, 1, 110, 190, 255);
-
-    constexpr size_t kCharsPerLine = 30;
+    constexpr uint8_t kGlyphWidth = 6;  // built-in font at size 1
+    const size_t charsPerLine =
+        (display.getWidth() - 2 * UICommon::kScreenPadding) / kGlyphWidth;
     constexpr uint8_t kMaxLines = 10;
     std::string line;
     uint16_t y = 92;
     uint8_t lines = 0;
     size_t start = 0;
 
-    while (start < assessment.size() && lines < kMaxLines) {
-        const size_t space = assessment.find(' ', start);
-        const size_t end = (space == std::string::npos) ? assessment.size() : space;
-        const std::string word = assessment.substr(start, end - start);
+    char title[36];
+    snprintf(title, sizeof(title), "AI assessment - %s", period);
+    UICommon::drawLabel(display, UICommon::kScreenPadding, 74,
+                        title, 1, 110, 190, 255);
 
-        if (!line.empty() && line.size() + 1 + word.size() > kCharsPerLine) {
+    while (start < assessment.size() && lines < kMaxLines) {
+        while (start < assessment.size() && assessment[start] == ' ') ++start;
+        if (start >= assessment.size()) break;
+        size_t end = assessment.find(' ', start);
+        if (end == std::string::npos) end = assessment.size();
+        std::string word = assessment.substr(start, end - start);
+
+        while (word.size() > charsPerLine && lines < kMaxLines) {
+            if (!line.empty()) {
+                display.setColor(224, 230, 242);
+                display.drawText(UICommon::kScreenPadding, y, line.c_str(), 1);
+                y += 14;
+                ++lines;
+                line.clear();
+            }
+            if (lines >= kMaxLines) break;
+            display.setColor(224, 230, 242);
+            display.drawText(UICommon::kScreenPadding, y,
+                             word.substr(0, charsPerLine).c_str(), 1);
+            y += 14;
+            ++lines;
+            word.erase(0, charsPerLine);
+        }
+        if (lines >= kMaxLines) break;
+        if (!word.empty() && !line.empty() &&
+            line.size() + 1 + word.size() > charsPerLine) {
             display.setColor(224, 230, 242);
             display.drawText(UICommon::kScreenPadding, y, line.c_str(), 1);
             y += 14;
             ++lines;
             line.clear();
-            if (lines >= kMaxLines) break;
         }
-        if (!line.empty()) line += ' ';
-        line += word;
-        start = (space == std::string::npos) ? assessment.size() : space + 1;
+        if (lines >= kMaxLines) break;
+        if (!word.empty()) {
+            if (!line.empty()) line += ' ';
+            line += word;
+        }
+        start = end + 1;
     }
+
     if (!line.empty() && lines < kMaxLines) {
-        if (start < assessment.size() && line.size() > kCharsPerLine - 3) {
-            line.resize(kCharsPerLine - 3);
-            line += "...";
-        }
         display.setColor(224, 230, 242);
         display.drawText(UICommon::kScreenPadding, y, line.c_str(), 1);
     }
