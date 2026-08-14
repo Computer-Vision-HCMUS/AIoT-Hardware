@@ -145,6 +145,7 @@ bool DemoApp::init() {
     app_state_.checkInStatus = "Press REC, then say a short sentence.";
     app_state_.checkInDetectedEmotion.clear();
     app_state_.checkInDetectedConfidence = 0;
+    app_state_.checkInProbabilities.fill(0);
     app_state_.wifiSetupMenuIndex = 0;
 
     app_state_.sharedContext.lastEmotion         = "Neutral";
@@ -353,6 +354,7 @@ bool DemoApp::update() {
                 app_state_.checkInStatus = "Press REC, then say a short sentence.";
                 app_state_.checkInDetectedEmotion.clear();
                 app_state_.checkInDetectedConfidence = 0;
+                app_state_.checkInProbabilities.fill(0);
             }
         }
 
@@ -437,6 +439,7 @@ bool DemoApp::update() {
             if (success) {
                     app_state_.checkInDetectedEmotion = result.label;
                     app_state_.checkInDetectedConfidence = result.confidence;
+                    app_state_.checkInProbabilities = result.probabilities;
                     app_state_.checkInUncertain = uncertain;
                     app_state_.checkInAnalyzing = false;
                     app_state_.checkInConfirmed = false;

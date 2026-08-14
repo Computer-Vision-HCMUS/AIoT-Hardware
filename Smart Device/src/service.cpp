@@ -353,6 +353,9 @@ bool finishCheckInCapture(EmotionResult& result, bool& isUncertain) {
 
     result.label = prediction.label;
     result.confidence = static_cast<uint8_t>(roundf(prediction.confidence * 100.0f));
+    for (size_t index = 0; index < aiot::ser::esp32::kClassCount; ++index) {
+        result.probabilities[index] = static_cast<uint8_t>(roundf(prediction.probabilities[index] * 100.0f));
+    }
     isUncertain = prediction.confidence < kCheckInConfidenceThreshold;
     Serial.printf("[CheckIn] %s (%.2f)%s\n", prediction.label, prediction.confidence,
                   isUncertain ? " uncertain" : "");

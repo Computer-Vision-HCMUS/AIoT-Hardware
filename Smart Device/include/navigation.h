@@ -110,6 +110,7 @@ struct AppState {
     std::string checkInStatus;
     std::string checkInDetectedEmotion;
     uint8_t checkInDetectedConfidence;
+    std::array<uint8_t, 8> checkInProbabilities;
 
     // WiFi Setup sub-state
     uint8_t wifiSetupMenuIndex; // 0 = toggle mode, 1 = back

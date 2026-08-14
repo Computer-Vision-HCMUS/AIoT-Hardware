@@ -6,6 +6,17 @@
 #include <cstdio>
 
 namespace ScreenHandlers {
+namespace {
+
+void drawProbability(DisplayController& display, uint16_t x, uint16_t y,
+                     const char* label, uint8_t probability, uint8_t red,
+                     uint8_t green, uint8_t blue) {
+    char text[22];
+    snprintf(text, sizeof(text), "%s %u%%", label, probability);
+    UICommon::drawLabel(display, x, y, text, 1, red, green, blue);
+}
+
+}  // namespace
 
 void drawCheckInScreen(DisplayController& display, AppState& state) {
     if (!display.isReady()) return;
@@ -53,26 +64,34 @@ void drawCheckInScreen(DisplayController& display, AppState& state) {
         return;
     }
 
-    UICommon::drawScreenFrame(display, "Check-In", state.checkInConfirmed ? "Confirmed" : "Confirm result");
-    UICommon::drawLabel(display, UICommon::kScreenPadding, 55,
-                        state.checkInConfirmed ? "Emotion saved." : "Detection complete - review it.",
-                        1, 80, 220, 120);
+    UICommon::drawScreenFrame(display, "Check-In", state.checkInConfirmed ? "Confirmed" : "RF probabilities");
 
     char buf[48];
     const std::string& displayedEmotion = state.checkInConfirmed
         ? state.sharedContext.lastEmotion : state.checkInDetectedEmotion;
     const uint8_t displayedConfidence = state.checkInConfirmed
         ? state.sharedContext.confidence : state.checkInDetectedConfidence;
-    snprintf(buf, sizeof(buf), "Emotion: %s", displayedEmotion.c_str());
-    UICommon::drawLabel(display, UICommon::kScreenPadding, 75, buf, 2, 255, 220, 60);
+    snprintf(buf, sizeof(buf), "TOP: %s", displayedEmotion.c_str());
+    UICommon::drawLabel(display, UICommon::kScreenPadding, 55, buf, 2, 255, 220, 60);
     snprintf(buf, sizeof(buf), "Confidence: %u%%", displayedConfidence);
-    UICommon::drawLabel(display, UICommon::kScreenPadding, 102, buf, 1, 180, 220, 255);
-    if (state.checkInUncertain && !state.checkInConfirmed)
-        UICommon::drawLabel(display, UICommon::kScreenPadding, 120, "Uncertain - confirm if correct", 1, 255, 180, 50);
-    else
-        UICommon::drawLabel(display, UICommon::kScreenPadding, 120, state.checkInStatus, 1, 120, 180, 255);
+    UICommon::drawLabel(display, UICommon::kScreenPadding, 80, buf, 1, 180, 220, 255);
+    UICommon::drawDivider(display, 96);
 
-    UICommon::drawCard(display, UICommon::kScreenPadding, 140,
+    const auto& probability = state.checkInProbabilities;
+    drawProbability(display, 12, 106, "ANGRY",   probability[0], 255, 110, 90);
+    drawProbability(display, 126, 106, "HAPPY",  probability[4], 255, 210, 70);
+    drawProbability(display, 12, 126, "CALM",    probability[1], 100, 210, 160);
+    drawProbability(display, 126, 126, "NEUTRAL", probability[5], 150, 190, 255);
+    drawProbability(display, 12, 146, "DISGUST", probability[2], 210, 135, 235);
+    drawProbability(display, 126, 146, "SAD",    probability[6], 120, 165, 255);
+    drawProbability(display, 12, 166, "FEAR",    probability[3], 255, 150, 100);
+    drawProbability(display, 126, 166, "SURPRISE", probability[7], 255, 230, 120);
+    if (state.checkInUncertain && !state.checkInConfirmed)
+        UICommon::drawLabel(display, UICommon::kScreenPadding, 190, "Uncertain - confirm if correct", 1, 255, 180, 50);
+    else
+        UICommon::drawLabel(display, UICommon::kScreenPadding, 190, state.checkInStatus, 1, 120, 180, 255);
+
+    UICommon::drawCard(display, UICommon::kScreenPadding, 210,
                        display.getWidth() - 2 * UICommon::kScreenPadding, 35,
                        state.checkInConfirmed ? "Support" : "Confirm",
                        state.checkInConfirmed ? "Press S2/S3 for support" : "Press S2/S3 to save");

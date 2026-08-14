@@ -2,6 +2,7 @@
 #define MOCK_DATA_H
 
 #include <cstdint>
+#include <array>
 #include <string>
 #include <vector>
 
@@ -11,6 +12,7 @@
 struct EmotionResult {
     std::string label;      // e.g. "Happy", "Calm", "Focused"
     uint8_t     confidence; // 0–100 (percentage)
+    std::array<uint8_t, 8> probabilities{}; // RF order documented in ser_esp32.h
 };
 
 // ---------------------------------------------------------------------------
