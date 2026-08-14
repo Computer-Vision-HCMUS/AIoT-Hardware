@@ -78,10 +78,10 @@ void drawSupportScreen(DisplayController& display, const AppState& state) {
             state.supportActivities[state.supportActivityIndex];
         UICommon::drawScreenFrame(display, "Activity", "Details from server");
 
-        uint16_t y = drawWrappedText(display, 8, 54, activity.title, 31, 2,
+        uint16_t y = drawWrappedText(display, UICommon::kScreenPadding, 54, activity.title, 31, 2,
                                      240, 240, 240);
         UICommon::drawDivider(display, y + 2);
-        drawWrappedText(display, 8, y + 12, activity.description, 34, 10,
+        drawWrappedText(display, UICommon::kScreenPadding, y + 12, activity.description, 34, 10,
                         180, 200, 225);
 
         UICommon::drawButtonLegend(display,
@@ -93,10 +93,10 @@ void drawSupportScreen(DisplayController& display, const AppState& state) {
     UICommon::drawScreenFrame(display, "Support", "Activities for you");
     char info[32];
     snprintf(info, sizeof(info), "Mood: %s", state.sharedContext.lastEmotion.c_str());
-    UICommon::drawLabel(display, 8, 52, info, 1, 100, 200, 120);
+    UICommon::drawLabel(display, UICommon::kScreenPadding, 52, info, 1, 100, 200, 120);
 
     if (total == 0) {
-        UICommon::drawLabel(display, 8, 78, "No activities available.", 1,
+        UICommon::drawLabel(display, UICommon::kScreenPadding, 78, "No activities available.", 1,
                             180, 200, 225);
     } else {
         uint8_t windowStart = 0;
@@ -112,13 +112,14 @@ void drawSupportScreen(DisplayController& display, const AppState& state) {
             const uint16_t y = 70 + row * 40;
             display.setColor(selected ? 25 : 14, selected ? 55 : 20,
                              selected ? 95 : 30);
-            display.drawRectangle(4, y, display.getWidth() - 8, 36, true);
+            display.drawRectangle(UICommon::kScreenPadding, y,
+                                  display.getWidth() - 2 * UICommon::kScreenPadding, 36, true);
             if (selected) {
                 display.setColor(80, 160, 255);
-                display.drawRectangle(4, y, 4, 36, true);
+                display.drawRectangle(UICommon::kScreenPadding, y, 4, 36, true);
             }
 
-            UICommon::drawLabel(display, 14, y + 11,
+            UICommon::drawLabel(display, UICommon::kScreenPadding + 6, y + 11,
                                 truncateText(state.supportActivities[index].title, 31),
                                 1, selected ? 255 : 210, selected ? 255 : 210,
                                 selected ? 255 : 210);

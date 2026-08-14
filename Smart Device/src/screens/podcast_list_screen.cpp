@@ -69,20 +69,20 @@ void drawPodcastListScreen(DisplayController& display, const AppState& state) {
 
         if (selected) {
             display.setColor(25, 55, 95);
-            display.drawRectangle(0, y, W, itemH, true);
+            display.drawRectangle(UICommon::kScreenPadding, y, W - 2 * UICommon::kScreenPadding, itemH, true);
             display.setColor(80, 160, 255);
-            display.drawRectangle(0, y, 4, itemH, true);
+            display.drawRectangle(UICommon::kScreenPadding, y, 4, itemH, true);
         } else {
             display.setColor(14, 20, 30);
-            display.drawRectangle(0, y, W, itemH, true);
+            display.drawRectangle(UICommon::kScreenPadding, y, W - 2 * UICommon::kScreenPadding, itemH, true);
         }
 
         // AI badge
         if (ep.isAiRecommended) {
             display.setColor(180, 130, 0);
-            display.drawRectangle(W - 26, y + 6, 22, 12, true);
+            display.drawRectangle(W - UICommon::kScreenPadding - 22, y + 6, 22, 12, true);
             display.setColor(255, 240, 0);
-            display.drawText(W - 24, y + 8, "AI", 1);
+            display.drawText(W - UICommon::kScreenPadding - 20, y + 8, "AI", 1);
 
             display.setColor(0, 220, 200);  // Distinct cyan for AI-recommended
         } else {
@@ -91,11 +91,11 @@ void drawPodcastListScreen(DisplayController& display, const AppState& state) {
                              selected ? 255 : 200);
         }
 
-        display.drawText(8, y + 5,
+        display.drawText(UICommon::kScreenPadding + 4, y + 5,
                          truncateForTft(ep.title, ep.isAiRecommended ? 31 : 37), 1);
 
         display.setColor(100, 120, 145);
-        display.drawText(8, y + 21,
+        display.drawText(UICommon::kScreenPadding + 4, y + 21,
                          truncateForTft(categoryLabel(ep.creator) + " | " + ep.duration, 37), 1);
     }
 
@@ -113,10 +113,10 @@ void drawPodcastListScreen(DisplayController& display, const AppState& state) {
         /*S5*/ "UP/BCK");
 
     if (!state.sharedContext.mediaPlaying && state.sharedContext.mediaStatus.empty()) {
-        UICommon::drawLabel(display, 4, display.getHeight() - 42,
+        UICommon::drawLabel(display, UICommon::kScreenPadding, display.getHeight() - 42,
                             "Stopped - choose an item and press PLAY", 1, 100, 130, 160);
     } else if (!state.sharedContext.mediaStatus.empty()) {
-        UICommon::drawLabel(display, 4, display.getHeight() - 42,
+        UICommon::drawLabel(display, UICommon::kScreenPadding, display.getHeight() - 42,
                             state.sharedContext.mediaStatus.c_str(), 1, 0, 220, 200);
     }
 }

@@ -43,6 +43,8 @@
 // Unlike EDGE_LOG this is never compiled out — it fires regardless of EDGE_API_DEBUG
 // so failures are visible on the serial monitor without a special build.
 #define STATS_LOG(fmt, ...) Serial.printf("[Stats] " fmt "\n", ##__VA_ARGS__)
+// One concise line per HTTP request; sensitive bodies and credentials are omitted.
+#define API_LOG(method, path, status) Serial.printf("[API] %s %s -> %d\n", method, path, status)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constructor
@@ -83,6 +85,7 @@ bool EdgeApiClient::postJson(const char* path, const String& payload,
     HTTPClient http;
     http.setTimeout(8000);
     if (!http.begin(url)) {
+        API_LOG("POST", path, -1);
         EDGE_LOG("http.begin failed for %s", url.c_str());
         return false;
     }
@@ -90,6 +93,7 @@ bool EdgeApiClient::postJson(const char* path, const String& payload,
     http.addHeader("X-Device-Token", network_.deviceToken());
     http.addHeader("Content-Type",   "application/json");
     const int status = http.POST(payload);
+    API_LOG("POST", path, status);
 
     if (status >= 200 && status < 300) {
         response = http.getString();
@@ -111,6 +115,7 @@ bool EdgeApiClient::getJson(const char* path, String& response) {
     HTTPClient http;
     http.setTimeout(8000);
     if (!http.begin(url)) {
+        API_LOG("GET", path, -1);
         EDGE_LOG("http.begin failed for %s", url.c_str());
         return false;
     }
@@ -118,6 +123,7 @@ bool EdgeApiClient::getJson(const char* path, String& response) {
     // GET requests still need the auth header (no body, no Content-Type)
     http.addHeader("X-Device-Token", network_.deviceToken());
     const int status = http.GET();
+    API_LOG("GET", path, status);
 
     if (status >= 200 && status < 300) {
         response = http.getString();
@@ -149,11 +155,13 @@ bool EdgeApiClient::healthCheck() {
     HTTPClient http;
     http.setTimeout(8000);
     if (!http.begin(url)) {
+        API_LOG("GET", "/", -1);
         Serial.printf("[EdgeAPI] Health check could not open %s\n", url.c_str());
         return false;
     }
 
     const int status = http.GET();
+    API_LOG("GET", "/", status);
     if (status >= 200 && status < 300) {
         response = http.getString();
     }
@@ -533,6 +541,7 @@ bool EdgeApiClient::submitCompanionPcm(const String& sessionId, const char* pcmP
     const String url = network_.serverBaseUrl() + "/api/conversations/voice?session_id=" + sessionId + "&sample_rate=16000";
     http.setTimeout(60000);  // Whisper + LLM + TTS may take longer than normal API calls.
     if (!http.begin(url)) {
+        API_LOG("POST", "/api/conversations/voice", -1);
         pcm.close();
         return false;
     }
@@ -541,6 +550,7 @@ bool EdgeApiClient::submitCompanionPcm(const String& sessionId, const char* pcmP
     http.addHeader("X-Audio-Format", "s16le");
     Serial.printf("[Companion] Uploading %u PCM bytes\n", (unsigned)pcm.size());
     const int status = http.sendRequest("POST", &pcm, pcm.size());
+    API_LOG("POST", "/api/conversations/voice", status);
     pcm.close();
     if (status != HTTP_CODE_OK) {
         Serial.printf("[Companion] Voice API HTTP %d: %s\n", status, http.getString().c_str());

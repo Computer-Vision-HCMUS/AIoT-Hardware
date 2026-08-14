@@ -273,10 +273,11 @@ void AudioManager::runStreamLoop() {
         http.setReuse(false);
         http.useHTTP10(true);
         if (!http.begin(stream_url_.c_str())) {
-            Serial.printf("[Audio] PCM HTTP begin failed (attempt %u)\n", attempt);
+            Serial.println("[API] GET /api/audio/stream -> -1");
         } else {
             if (!stream_device_token_.empty()) http.addHeader("X-Device-Token", stream_device_token_.c_str());
             const int status = http.GET();
+            Serial.printf("[API] GET /api/audio/stream -> %d\n", status);
             if (status != HTTP_CODE_OK) {
                 Serial.printf("[Audio] PCM stream HTTP %d (attempt %u)\n", status, attempt);
             } else {

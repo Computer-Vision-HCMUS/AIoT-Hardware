@@ -347,14 +347,13 @@ bool NetworkManager::pairDevice(const String& serverUrl,
     HTTPClient http;
     http.setTimeout(8000);
     if (!http.begin(url)) {
-        Serial.printf("[Network] pairDevice: http.begin failed for %s\n",
-                      url.c_str());
+        Serial.println("[API] POST /api/devices/pair -> -1");
         return false;
     }
     http.addHeader("Content-Type", "application/json");
 
     const int status = http.POST(payload);
-    Serial.printf("[Network] POST %s → HTTP %d\n", url.c_str(), status);
+    Serial.printf("[API] POST /api/devices/pair -> %d\n", status);
 
     if (status != 201) {
         Serial.printf("[Network] Pairing failed (HTTP %d): %s\n",

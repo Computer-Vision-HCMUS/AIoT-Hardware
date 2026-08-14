@@ -30,7 +30,7 @@ void drawHomeScreen(DisplayController& display, const AppState& state) {
     display.clear();
 
     display.setColor(255, 255, 255);
-    display.drawText(6, 6, "EmotiCare", 2);
+    display.drawText(UICommon::kScreenPadding, UICommon::kScreenTitleTop, "EmotiCare", 2);
 
     UICommon::drawDivider(display, 28);
 
@@ -38,7 +38,7 @@ void drawHomeScreen(DisplayController& display, const AppState& state) {
     // Network status is supplied by NetworkManager (Online / Setup AP / Offline).
     const bool online = state.sharedContext.deviceStatus == "Online";
     display.setColor(online ? 80 : 210, online ? 200 : 150, online ? 100 : 70);
-    display.drawText(6, 33, "WiFi", 1);
+    display.drawText(UICommon::kScreenPadding, 33, "WiFi", 1);
     display.setColor(50, 70, 90);
     display.drawText(30, 33, "|", 1);
     display.setColor(online ? 100 : 240, online ? 220 : 180, online ? 120 : 90);
@@ -91,15 +91,15 @@ void drawHomeScreen(DisplayController& display, const AppState& state) {
 
         if (selected) {
             display.setColor(28, 58, 112);
-            display.drawRectangle(0, y, W, itemH, true);
+            display.drawRectangle(UICommon::kScreenPadding, y, W - 2 * UICommon::kScreenPadding, itemH, true);
             display.setColor(80, 160, 255);
-            display.drawRectangle(0, y, 4, itemH, true);
+            display.drawRectangle(UICommon::kScreenPadding, y, 4, itemH, true);
             display.setColor(255, 255, 255);
         } else {
             display.setColor(85, 105, 135);
         }
 
-        display.drawText(10, y + 10, kMenuItems[i], 1);
+        display.drawText(UICommon::kScreenPadding + 8, y + 10, kMenuItems[i], 1);
     }
 
     // ---- Button legend ----

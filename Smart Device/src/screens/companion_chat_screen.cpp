@@ -86,7 +86,8 @@ void drawChatBubble(DisplayController& display, const ChatMessage& message,
     const uint16_t W = display.getWidth();
     const uint16_t bubbleW = 208;
     const uint16_t bubbleH = bubbleHeight(lines);
-    const uint16_t x = isUser ? W - bubbleW - 5 : 5;
+    const uint16_t x = isUser ? W - bubbleW - UICommon::kScreenPadding
+                              : UICommon::kScreenPadding;
 
     if (isUser) {
         display.setColor(35, 75, 145);
@@ -135,8 +136,8 @@ void drawStatus(DisplayController& display, const SharedContext& ctx) {
 
     if (ctx.companionSending) {
         display.setColor(80, 65, 20);
-        display.drawRectangle(5, statusY, W - 10, 22, true);
-        UICommon::drawLabel(display, 12, statusY + 6, "Companion is thinking...", 1, 255, 205, 70);
+        display.drawRectangle(UICommon::kScreenPadding, statusY, W - 2 * UICommon::kScreenPadding, 22, true);
+        UICommon::drawLabel(display, UICommon::kScreenPadding + 4, statusY + 6, "Companion is thinking...", 1, 255, 205, 70);
         UICommon::drawButtonLegend(display,
             /*S1*/ "--", /*S2*/ "--", /*S3*/ "WAIT", /*S4*/ "--", /*S5*/ "WAIT");
     } else if (ctx.isRecording) {
@@ -144,15 +145,16 @@ void drawStatus(DisplayController& display, const SharedContext& ctx) {
         char label[24];
         snprintf(label, sizeof(label), "REC  %02u/10s", elapsed > 10 ? 10 : elapsed);
         display.setColor(135, 25, 35);
-        display.drawRectangle(5, statusY, W - 10, 22, true);
+        display.drawRectangle(UICommon::kScreenPadding, statusY, W - 2 * UICommon::kScreenPadding, 22, true);
         display.setColor(255, 220, 225);
-        display.drawText(12, statusY + 6, label, 1);
+        display.drawText(UICommon::kScreenPadding + 4, statusY + 6, label, 1);
         display.drawText(110, statusY + 6, "Listening...", 1);
         UICommon::drawButtonLegend(display,
             /*S1*/ "--", /*S2*/ "--", /*S3*/ "--", /*S4*/ "--", /*S5*/ "CANCEL");
     } else {
         const std::string status = ctx.companionStatus.empty() ? "Press REC, then speak." : ctx.companionStatus;
-        UICommon::drawLabel(display, 8, statusY + 6, truncateUtf8(status, 34), 1, 105, 190, 175);
+        UICommon::drawLabel(display, UICommon::kScreenPadding, statusY + 6,
+                            truncateUtf8(status, 34), 1, 105, 190, 175);
         UICommon::drawButtonLegend(display,
             /*S1*/ ctx.companionRecordingReady ? "--" : "REC",
             /*S2*/ ctx.companionRecordingReady ? "SEND" : "--",

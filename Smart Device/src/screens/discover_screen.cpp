@@ -29,7 +29,7 @@ void drawDiscoverScreen(DisplayController& display, const AppState& state) {
 
     // ---- Title ----
     display.setColor(255, 255, 255);
-    display.drawText(6, 6, "Discover", 2);
+    display.drawText(UICommon::kScreenPadding, UICommon::kScreenTitleTop, "Discover", 2);
 
     UICommon::drawDivider(display, 28);
 
@@ -44,17 +44,17 @@ void drawDiscoverScreen(DisplayController& display, const AppState& state) {
                  state.sharedContext.lastEmotion.c_str(),
                  state.sharedContext.confidence);
         display.setColor(255, 200, 60);
-        display.drawText(6, 33, buf, 1);
+        display.drawText(UICommon::kScreenPadding, 33, buf, 1);
 
         display.setColor(100, 170, 240);
-        display.drawText(6, 45, "AI picks tuned to your mood", 1);
+        display.drawText(UICommon::kScreenPadding, 45, "AI picks tuned to your mood", 1);
     } else {
         // No check-in yet — default neutral line
         display.setColor(130, 150, 175);
-        display.drawText(6, 33, "Good for: Neutral (default)", 1);
+        display.drawText(UICommon::kScreenPadding, 33, "Good for: Neutral (default)", 1);
 
         display.setColor(80, 100, 125);
-        display.drawText(6, 45, "Do Check-In for mood-based picks", 1);
+        display.drawText(UICommon::kScreenPadding, 45, "Do Check-In for mood-based picks", 1);
     }
 
     UICommon::drawDivider(display, 58);
@@ -85,17 +85,17 @@ void drawDiscoverScreen(DisplayController& display, const AppState& state) {
 
         if (selected) {
             display.setColor(28, 58, 112);
-            display.drawRectangle(0, y, W, itemH, true);
+            display.drawRectangle(UICommon::kScreenPadding, y, W - 2 * UICommon::kScreenPadding, itemH, true);
             display.setColor(80, 160, 255);
-            display.drawRectangle(0, y, 4, itemH, true);
+            display.drawRectangle(UICommon::kScreenPadding, y, 4, itemH, true);
             display.setColor(255, 255, 255);
         } else {
             display.setColor(18, 26, 38);
-            display.drawRectangle(0, y, W, itemH, true);
+            display.drawRectangle(UICommon::kScreenPadding, y, W - 2 * UICommon::kScreenPadding, itemH, true);
             display.setColor(140, 155, 175);
         }
 
-        display.drawText(12, y + 10, kItems[i], 1);
+        display.drawText(UICommon::kScreenPadding + 8, y + 10, kItems[i], 1);
 
         // Personalised sub-description when selected
         if (selected) {
@@ -108,10 +108,10 @@ void drawDiscoverScreen(DisplayController& display, const AppState& state) {
                 snprintf(subdesc, sizeof(subdesc), "%s (neutral default)", subDescriptions[i]);
             }
             display.setColor(140, 200, 255);
-            display.drawText(12, y + 26, subdesc, 1);
+            display.drawText(UICommon::kScreenPadding + 8, y + 26, subdesc, 1);
         } else {
             display.setColor(80, 95, 115);
-            display.drawText(12, y + 26, subDescriptions[i], 1);
+            display.drawText(UICommon::kScreenPadding + 8, y + 26, subDescriptions[i], 1);
         }
     }
 

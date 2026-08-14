@@ -10,6 +10,13 @@ class DisplayController;
 
 namespace UICommon {
 
+// Shared inset for screen content. Full-width dividers and the button footer
+// deliberately remain edge-to-edge.
+constexpr uint16_t kScreenPadding = 12;
+// Large TFT glyphs extend slightly above their draw origin, so headers need a
+// larger top inset than ordinary content.
+constexpr uint16_t kScreenTitleTop = 12;
+
 // Basic primitives
 void drawLabel(DisplayController& display, uint16_t x, uint16_t y,
                const std::string& text, uint8_t fontSize,

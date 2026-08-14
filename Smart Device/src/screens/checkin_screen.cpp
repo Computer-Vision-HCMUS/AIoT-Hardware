@@ -14,13 +14,13 @@ void drawCheckInScreen(DisplayController& display, AppState& state) {
 
     if (state.checkInAnalyzing) {
         if (state.checkInProcessing) {
-            UICommon::drawLabel(display, 8, 55, "Processing voice emotion...", 1, 255, 190, 40);
-            UICommon::drawLabel(display, 8, 75, "Please wait", 2, 180, 220, 255);
+            UICommon::drawLabel(display, UICommon::kScreenPadding, 55, "Processing voice emotion...", 1, 255, 190, 40);
+            UICommon::drawLabel(display, UICommon::kScreenPadding, 75, "Please wait", 2, 180, 220, 255);
             static uint8_t dots = 0;
             dots = (dots + 1) % 4;
             char waitText[20];
             snprintf(waitText, sizeof(waitText), "SER%s", dots == 0 ? "" : dots == 1 ? "." : dots == 2 ? ".." : "...");
-            UICommon::drawLabel(display, 8, 108, waitText, 1, 100, 200, 120);
+            UICommon::drawLabel(display, UICommon::kScreenPadding, 108, waitText, 1, 100, 200, 120);
             UICommon::drawButtonLegend(display,
                 /*S1*/ "WAIT", /*S2*/ "WAIT", /*S3*/ "WAIT", /*S4*/ "WAIT", /*S5*/ "WAIT");
             return;
@@ -28,18 +28,19 @@ void drawCheckInScreen(DisplayController& display, AppState& state) {
             const uint32_t elapsed = (millis() - state.checkInRecordingStartMs) / 1000;
             char timer[24];
             snprintf(timer, sizeof(timer), "REC  %02u/10s", elapsed > 10 ? 10 : elapsed);
-            UICommon::drawLabel(display, 8, 55, timer, 2, 255, 90, 90);
-            UICommon::drawLabel(display, 8, 83, "Say how you feel today.", 1, 180, 220, 255);
+            UICommon::drawLabel(display, UICommon::kScreenPadding, 55, timer, 2, 255, 90, 90);
+            UICommon::drawLabel(display, UICommon::kScreenPadding, 83, "Say how you feel today.", 1, 180, 220, 255);
         } else {
-            UICommon::drawLabel(display, 8, 55, "Voice emotion check-in", 1, 180, 220, 255);
-            UICommon::drawLabel(display, 8, 73, state.checkInStatus, 1, 120, 150, 180);
+            UICommon::drawLabel(display, UICommon::kScreenPadding, 55, "Voice emotion check-in", 1, 180, 220, 255);
+            UICommon::drawLabel(display, UICommon::kScreenPadding, 73, state.checkInStatus, 1, 120, 150, 180);
         }
 
         static uint8_t pulse = 0;
         pulse = (pulse + 1) % 4;
         display.setColor(0, 120, 60);
-        display.drawRectangle(8, 102, (pulse + 1) * 45, 14, true);
-        UICommon::drawCard(display, 8, 132, 220, 43,
+        display.drawRectangle(UICommon::kScreenPadding, 102, (pulse + 1) * 45, 14, true);
+        UICommon::drawCard(display, UICommon::kScreenPadding, 132,
+                           display.getWidth() - 2 * UICommon::kScreenPadding, 43,
                            "On-device SER",
                            "PCM -> MFCC -> emotion session");
 
@@ -53,7 +54,7 @@ void drawCheckInScreen(DisplayController& display, AppState& state) {
     }
 
     UICommon::drawScreenFrame(display, "Check-In", state.checkInConfirmed ? "Confirmed" : "Confirm result");
-    UICommon::drawLabel(display, 8, 55,
+    UICommon::drawLabel(display, UICommon::kScreenPadding, 55,
                         state.checkInConfirmed ? "Emotion saved." : "Detection complete - review it.",
                         1, 80, 220, 120);
 
@@ -63,15 +64,16 @@ void drawCheckInScreen(DisplayController& display, AppState& state) {
     const uint8_t displayedConfidence = state.checkInConfirmed
         ? state.sharedContext.confidence : state.checkInDetectedConfidence;
     snprintf(buf, sizeof(buf), "Emotion: %s", displayedEmotion.c_str());
-    UICommon::drawLabel(display, 8, 75, buf, 2, 255, 220, 60);
+    UICommon::drawLabel(display, UICommon::kScreenPadding, 75, buf, 2, 255, 220, 60);
     snprintf(buf, sizeof(buf), "Confidence: %u%%", displayedConfidence);
-    UICommon::drawLabel(display, 8, 102, buf, 1, 180, 220, 255);
+    UICommon::drawLabel(display, UICommon::kScreenPadding, 102, buf, 1, 180, 220, 255);
     if (state.checkInUncertain && !state.checkInConfirmed)
-        UICommon::drawLabel(display, 8, 120, "Uncertain - confirm if correct", 1, 255, 180, 50);
+        UICommon::drawLabel(display, UICommon::kScreenPadding, 120, "Uncertain - confirm if correct", 1, 255, 180, 50);
     else
-        UICommon::drawLabel(display, 8, 120, state.checkInStatus, 1, 120, 180, 255);
+        UICommon::drawLabel(display, UICommon::kScreenPadding, 120, state.checkInStatus, 1, 120, 180, 255);
 
-    UICommon::drawCard(display, 8, 140, 220, 35,
+    UICommon::drawCard(display, UICommon::kScreenPadding, 140,
+                       display.getWidth() - 2 * UICommon::kScreenPadding, 35,
                        state.checkInConfirmed ? "Support" : "Confirm",
                        state.checkInConfirmed ? "Press S2/S3 for support" : "Press S2/S3 to save");
     UICommon::drawButtonLegend(display,

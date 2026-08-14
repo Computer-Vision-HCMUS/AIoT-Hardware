@@ -95,11 +95,11 @@ void drawButtonLegend(DisplayController& display,
     const uint16_t row1Y = footerY + 3;
     // S1 (MODE) — left
     display.setColor(80, 150, 220);
-    display.drawText(2, row1Y, "S1", 1);
+    display.drawText(kScreenPadding, row1Y, "S1", 1);
     display.setColor(60, 80, 100);
-    display.drawText(14, row1Y, ":", 1);
+    display.drawText(kScreenPadding + 12, row1Y, ":", 1);
     display.setColor(200, 220, 255);
-    display.drawText(19, row1Y, modeLabel, 1);
+    display.drawText(kScreenPadding + 17, row1Y, modeLabel, 1);
 
     // S2 (ACTION) — center-left
     display.setColor(80, 150, 220);
@@ -151,7 +151,7 @@ void drawHintBar(DisplayController& display, const std::string& hintText) {
     fillRect(display, 0, barY, display.getWidth(), 1);
 
     display.setColor(140, 210, 255);
-    display.drawText(4, barY + 7, hintText, 1);
+    display.drawText(kScreenPadding, barY + 7, hintText, 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -167,11 +167,11 @@ void drawScreenFrame(DisplayController& display,
 
     // Title (large)
     display.setColor(255, 255, 255);
-    display.drawText(6, 6, title, 2);
+    display.drawText(kScreenPadding, kScreenTitleTop, title, 2);
 
     // Subtitle (small, muted)
     display.setColor(140, 170, 210);
-    display.drawText(6, 30, subtitle, 1);
+    display.drawText(kScreenPadding, 30, subtitle, 1);
 
     // Divider below header
     drawDivider(display, 45);

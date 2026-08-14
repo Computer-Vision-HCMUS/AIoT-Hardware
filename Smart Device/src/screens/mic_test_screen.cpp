@@ -30,19 +30,19 @@ void drawMicTestScreen(DisplayController& display, const AppState& state) {
     display.clear();
 
     display.setColor(255, 255, 255);
-    display.drawText(6, 6, "Test Mic", 2);
+    display.drawText(UICommon::kScreenPadding, UICommon::kScreenTitleTop, "Test Mic", 2);
 
     UICommon::drawDivider(display, 28);
 
     display.setColor(130, 150, 180);
-    display.drawText(6, 33, "Speak into mic — hear it live", 1);
+    display.drawText(UICommon::kScreenPadding, 33, "Speak into mic — hear it live", 1);
 
     UICommon::drawDivider(display, 46);
 
     // ── VU Meter ──
-    const uint16_t meterX = 8;
+    const uint16_t meterX = UICommon::kScreenPadding;
     const uint16_t meterY = 62;
-    const uint16_t meterW = W - 16;   // 224px wide
+    const uint16_t meterW = W - 2 * UICommon::kScreenPadding;
     const uint16_t meterH = 32;
 
     const uint16_t peak = state.sharedContext.micPeakLevel;  // 0–100
@@ -54,7 +54,7 @@ void drawMicTestScreen(DisplayController& display, const AppState& state) {
     char pctBuf[8];
     snprintf(pctBuf, sizeof(pctBuf), "%3u%%", peak);
     display.setColor(200, 215, 240);
-    display.drawText(W - 34, 52, pctBuf, 1);
+    display.drawText(W - UICommon::kScreenPadding - 26, 52, pctBuf, 1);
 
     // Meter background (dark rail)
     display.setColor(22, 32, 48);
@@ -92,13 +92,13 @@ void drawMicTestScreen(DisplayController& display, const AppState& state) {
     display.setColor(active ? 80 : 140,
                      active ? 220 : 150,
                      active ? 110 : 160);
-    display.drawText(6, 104, active ? "Status : Listening..." : "Status : Starting...", 1);
+    display.drawText(UICommon::kScreenPadding, 104, active ? "Status : Listening..." : "Status : Starting...", 1);
 
     display.setColor(70, 90, 115);
-    display.drawText(6, 120, "Mic    : INMP441  (I2S1 / GPIO 22,21,35)", 1);
-    display.drawText(6, 136, "Amp    : MAX98357 (I2S0 / GPIO 25,32,33)", 1);
-    display.drawText(6, 152, "Rate   : 16 kHz  |  Depth : 16-bit", 1);
-    display.drawText(6, 168, "Latency: ~32 ms per DMA buffer", 1);
+    display.drawText(UICommon::kScreenPadding, 120, "Mic    : INMP441  (I2S1 / GPIO 22,21,35)", 1);
+    display.drawText(UICommon::kScreenPadding, 136, "Amp    : MAX98357 (I2S0 / GPIO 25,32,33)", 1);
+    display.drawText(UICommon::kScreenPadding, 152, "Rate   : 16 kHz  |  Depth : 16-bit", 1);
+    display.drawText(UICommon::kScreenPadding, 168, "Latency: ~32 ms per DMA buffer", 1);
 
     // ── Button legend ──
     UICommon::drawButtonLegend(display,

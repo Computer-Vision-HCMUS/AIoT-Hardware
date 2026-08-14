@@ -31,7 +31,7 @@ static void drawStatBar(DisplayController& display,
                          uint16_t y,
                          uint8_t r, uint8_t g, uint8_t b) {
     display.setColor(180, 180, 200);
-    display.drawText(6, y, label, 1);
+    display.drawText(UICommon::kScreenPadding, y, label, 1);
 
     // Bar background
     const uint16_t barX = 68;
@@ -57,7 +57,7 @@ static void drawAiAssessment(DisplayController& display,
                              const char* period) {
     char title[36];
     snprintf(title, sizeof(title), "AI assessment - %s", period);
-    UICommon::drawLabel(display, 6, 74, title, 1, 110, 190, 255);
+    UICommon::drawLabel(display, UICommon::kScreenPadding, 74, title, 1, 110, 190, 255);
 
     constexpr size_t kCharsPerLine = 30;
     constexpr uint8_t kMaxLines = 10;
@@ -73,7 +73,7 @@ static void drawAiAssessment(DisplayController& display,
 
         if (!line.empty() && line.size() + 1 + word.size() > kCharsPerLine) {
             display.setColor(224, 230, 242);
-            display.drawText(6, y, line.c_str(), 1);
+            display.drawText(UICommon::kScreenPadding, y, line.c_str(), 1);
             y += 14;
             ++lines;
             line.clear();
@@ -89,7 +89,7 @@ static void drawAiAssessment(DisplayController& display,
             line += "...";
         }
         display.setColor(224, 230, 242);
-        display.drawText(6, y, line.c_str(), 1);
+        display.drawText(UICommon::kScreenPadding, y, line.c_str(), 1);
     }
 }
 
@@ -105,17 +105,20 @@ void drawInsightsScreen(DisplayController& display, const AppState& state) {
     const uint16_t W    = display.getWidth();
     const uint16_t psY  = 48;
     const uint16_t psH  = 18;
-    uint16_t colW = W / kPeriodCount;
+    const uint16_t contentW = W - 2 * UICommon::kScreenPadding;
+    uint16_t colW = contentW / kPeriodCount;
     for (uint8_t i = 0; i < kPeriodCount; ++i) {
         bool sel = (i == pidx);
         display.setColor(sel ? 40 : 18, sel ? 80 : 25, sel ? 140 : 40);
-        display.drawRectangle(i * colW, psY, colW, psH, true);
+        const uint16_t x = UICommon::kScreenPadding + i * colW;
+        const uint16_t width = (i == kPeriodCount - 1) ? contentW - i * colW : colW;
+        display.drawRectangle(x, psY, width, psH, true);
         if (sel) {
             display.setColor(80, 160, 255);
-            display.drawRectangle(i * colW, psY, colW, 2, true);
+            display.drawRectangle(x, psY, width, 2, true);
         }
         display.setColor(sel ? 255 : 130, sel ? 255 : 140, sel ? 255 : 160);
-        display.drawText(i * colW + 6, psY + 4, kPeriods[i], 1);
+        display.drawText(x + 6, psY + 4, kPeriods[i], 1);
     }
 
     if (state.sharedContext.insightsShowingAiAssessment) {
@@ -147,7 +150,7 @@ void drawInsightsScreen(DisplayController& display, const AppState& state) {
     // Summary note
     char summary[48];
     snprintf(summary, sizeof(summary), "Period: %s  |  AI-analyzed", dist.period.c_str());
-    UICommon::drawLabel(display, 6, 205, summary, 1, 90, 110, 140);
+    UICommon::drawLabel(display, UICommon::kScreenPadding, 205, summary, 1, 90, 110, 140);
 
     UICommon::drawButtonLegend(display,
         /*S1*/ "AI VIEW",
