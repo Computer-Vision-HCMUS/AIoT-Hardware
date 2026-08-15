@@ -40,6 +40,8 @@ const char* DemoStateMachine::getStateName() const {
         case DemoState::MIC_TEST:       return "MIC_TEST";
         case DemoState::WIFI_SETUP:     return "WIFI_SETUP";
         case DemoState::BUTTON_TEST:    return "BUTTON_TEST";
+        case DemoState::EMOTION_SELECT: return "EMOTION_SELECT";
+        case DemoState::POST_CHECKIN_MENU: return "POST_CHECKIN_MENU";
         case DemoState::ERROR_STATE:    return "ERROR";
         default:                        return "UNKNOWN";
     }

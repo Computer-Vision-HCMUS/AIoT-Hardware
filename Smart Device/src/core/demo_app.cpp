@@ -20,6 +20,7 @@
 
 #include "screens/home_screen.h"
 #include "screens/checkin_screen.h"
+#include "screens/emotion_select_screen.h"
 #include "screens/support_screen.h"
 #include "screens/discover_screen.h"
 #include "screens/music_list_screen.h"
@@ -146,6 +147,9 @@ bool DemoApp::init() {
     app_state_.checkInDetectedEmotion.clear();
     app_state_.checkInDetectedConfidence = 0;
     app_state_.checkInProbabilities.fill(0);
+    app_state_.checkInTopEmotionIndices.fill(0);
+    app_state_.checkInEmotionChoiceIndex = 0;
+    app_state_.postCheckInMenuIndex = 0;
     app_state_.wifiSetupMenuIndex = 0;
 
     app_state_.sharedContext.lastEmotion         = "Neutral";
@@ -302,6 +306,8 @@ bool DemoApp::update() {
         switch (app_state_.currentScreen) {
             case ScreenId::HOME:           target = DemoState::HOME;           break;
             case ScreenId::CHECK_IN:       target = DemoState::CHECK_IN;       break;
+            case ScreenId::EMOTION_SELECT: target = DemoState::EMOTION_SELECT; break;
+            case ScreenId::POST_CHECKIN_MENU: target = DemoState::POST_CHECKIN_MENU; break;
             case ScreenId::SUPPORT:        target = DemoState::SUPPORT;        break;
             case ScreenId::DISCOVER:       target = DemoState::DISCOVER;       break;
             case ScreenId::MUSIC_LIST:     target = DemoState::MUSIC_LIST;     break;
@@ -355,6 +361,8 @@ bool DemoApp::update() {
                 app_state_.checkInDetectedEmotion.clear();
                 app_state_.checkInDetectedConfidence = 0;
                 app_state_.checkInProbabilities.fill(0);
+                app_state_.checkInTopEmotionIndices.fill(0);
+                app_state_.checkInEmotionChoiceIndex = 0;
             }
         }
 
@@ -440,11 +448,28 @@ bool DemoApp::update() {
                     app_state_.checkInDetectedEmotion = result.label;
                     app_state_.checkInDetectedConfidence = result.confidence;
                     app_state_.checkInProbabilities = result.probabilities;
+                    for (uint8_t rank = 0; rank < 3; ++rank) {
+                        uint8_t best = 0;
+                        bool found = false;
+                        for (uint8_t candidate = 0; candidate < 8; ++candidate) {
+                            bool alreadySelected = false;
+                            for (uint8_t previous = 0; previous < rank; ++previous) {
+                                alreadySelected |= app_state_.checkInTopEmotionIndices[previous] == candidate;
+                            }
+                            if (!alreadySelected &&
+                                (!found || result.probabilities[candidate] > result.probabilities[best])) {
+                                best = candidate;
+                                found = true;
+                            }
+                        }
+                        app_state_.checkInTopEmotionIndices[rank] = best;
+                    }
+                    app_state_.checkInEmotionChoiceIndex = 0;
                     app_state_.checkInUncertain = uncertain;
                     app_state_.checkInAnalyzing = false;
                     app_state_.checkInConfirmed = false;
-                    app_state_.checkInStatus = uncertain ? "Low confidence - confirm result."
-                                                         : "Confirm to save emotion.";
+                    app_state_.checkInStatus = uncertain ? "Low confidence - choose a label."
+                                                         : "Review probabilities, then choose.";
             } else {
                 app_state_.checkInHasRecording = false;
                 app_state_.checkInStatus = "Audio too quiet/short. Please try again.";
@@ -462,6 +487,12 @@ bool DemoApp::update() {
                     break;
                 case DemoState::CHECK_IN:
                     ScreenHandlers::drawCheckInScreen(*display_, app_state_);
+                    break;
+                case DemoState::EMOTION_SELECT:
+                    ScreenHandlers::drawEmotionSelectScreen(*display_, app_state_);
+                    break;
+                case DemoState::POST_CHECKIN_MENU:
+                    ScreenHandlers::drawPostCheckInMenuScreen(*display_, app_state_);
                     break;
                 case DemoState::SUPPORT:
                     ScreenHandlers::drawSupportScreen(*display_, app_state_);

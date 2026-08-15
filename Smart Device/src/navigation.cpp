@@ -39,6 +39,8 @@ void handleButtonPress(AppState& state, ButtonId button) {
     switch (state.currentScreen) {
         case ScreenId::HOME:           handleHomeInput(state, button);          break;
         case ScreenId::CHECK_IN:       handleCheckInInput(state, button);       break;
+        case ScreenId::EMOTION_SELECT: handleEmotionSelectInput(state, button); break;
+        case ScreenId::POST_CHECKIN_MENU: handlePostCheckInMenuInput(state, button); break;
         case ScreenId::SUPPORT:        handleSupportInput(state, button);       break;
         case ScreenId::DISCOVER:       handleDiscoverInput(state, button);      break;
         case ScreenId::MUSIC_LIST:     handleMusicListInput(state, button);     break;
@@ -64,7 +66,7 @@ void handleButtonPress(AppState& state, ButtonId button) {
 //   MODE(0)   = unused on HOME
 // ---------------------------------------------------------------------------
 void handleHomeInput(AppState& state, ButtonId button) {
-    constexpr uint8_t kMenuItems = 7;
+    constexpr uint8_t kMenuItems = 8;
     if (button == ButtonId::NEXT) {
         if (state.homeMenuIndex + 1 < kMenuItems) {
             state.homeMenuIndex++;
@@ -77,16 +79,22 @@ void handleHomeInput(AppState& state, ButtonId button) {
         switch (state.homeMenuIndex) {
             case 0: pushScreen(state, ScreenId::CHECK_IN);       break;
             case 1: pushScreen(state, ScreenId::DISCOVER);       break;
-            case 2: pushScreen(state, ScreenId::COMPANION_CHAT); break;
-            case 3: pushScreen(state, ScreenId::INSIGHTS);       break;
-            case 4: pushScreen(state, ScreenId::MIC_TEST);       break;
-            case 5:
+            case 2:
+                state.supportActivities = getRecommendedActivities(state.sharedContext.lastEmotion);
+                state.supportActivityIndex = 0;
+                state.supportShowingDetail = false;
+                pushScreen(state, ScreenId::SUPPORT);
+                break;
+            case 3: pushScreen(state, ScreenId::COMPANION_CHAT); break;
+            case 4: pushScreen(state, ScreenId::INSIGHTS);       break;
+            case 5: pushScreen(state, ScreenId::MIC_TEST);       break;
+            case 6:
                 state.sharedContext.buttonPressCounts.fill(0);
                 state.sharedContext.buttonPressed.fill(false);
                 state.sharedContext.lastButtonId = 0;
                 pushScreen(state, ScreenId::BUTTON_TEST);
                 break;
-            case 6:
+            case 7:
                 state.wifiSetupMenuIndex = 0;
                 pushScreen(state, ScreenId::WIFI_SETUP);
                 break;
@@ -130,23 +138,10 @@ void handleCheckInInput(AppState& state, ButtonId button) {
         state.checkInProcessingStartMs = millis();
     } else if ((button == ButtonId::ACTION || button == ButtonId::START) &&
                !state.checkInAnalyzing && !state.checkInConfirmed) {
-        bool synced = false;
-        if (confirmCheckInEmotion(state.checkInDetectedEmotion,
-                                  state.checkInDetectedConfidence, synced)) {
-            state.checkInConfirmed = true;
-            state.sharedContext.lastEmotion = state.checkInDetectedEmotion;
-            state.sharedContext.confidence = state.checkInDetectedConfidence;
-            state.checkInStatus = synced ? "Saved & synced. Press S2/S3."
-                                        : "Saved local. Press S2/S3.";
-        } else {
-            state.checkInStatus = "Save failed. Confirm again.";
-        }
+        pushScreen(state, ScreenId::EMOTION_SELECT);
     } else if ((button == ButtonId::ACTION || button == ButtonId::START) &&
                !state.checkInAnalyzing && state.checkInConfirmed) {
-        state.supportActivities = getRecommendedActivities(state.sharedContext.lastEmotion);
-        state.supportActivityIndex = 0;
-        state.supportShowingDetail = false;
-        pushScreen(state, ScreenId::SUPPORT);
+        pushScreen(state, ScreenId::POST_CHECKIN_MENU);
     } else if (button == ButtonId::BACK) {
         if (state.checkInRecording) {
             pauseAudioCapture();
@@ -154,6 +149,57 @@ void handleCheckInInput(AppState& state, ButtonId button) {
         }
         state.checkInHasRecording = false;
         goBack(state);
+    }
+}
+
+void handleEmotionSelectInput(AppState& state, ButtonId button) {
+    if (button == ButtonId::NEXT) {
+        state.checkInEmotionChoiceIndex = (state.checkInEmotionChoiceIndex + 1) % 3;
+    } else if (button == ButtonId::BACK) {
+        if (state.checkInEmotionChoiceIndex > 0) {
+            --state.checkInEmotionChoiceIndex;
+        } else {
+            goBack(state);
+        }
+    } else if (button == ButtonId::ACTION || button == ButtonId::START) {
+        const uint8_t emotionIndex = state.checkInTopEmotionIndices[state.checkInEmotionChoiceIndex];
+        static constexpr const char* kLabels[] = {
+            "angry", "calm", "disgust", "fearful", "happy", "neutral", "sad", "surprised"};
+        const uint8_t confidence = state.checkInProbabilities[emotionIndex];
+        bool synced = false;
+        if (confirmCheckInEmotion(kLabels[emotionIndex], confidence, synced)) {
+            state.checkInConfirmed = true;
+            state.sharedContext.lastEmotion = kLabels[emotionIndex];
+            state.sharedContext.confidence = confidence;
+            state.checkInStatus = synced ? "Saved & synced." : "Saved locally.";
+            state.postCheckInMenuIndex = 0;
+            pushScreen(state, ScreenId::POST_CHECKIN_MENU);
+        } else {
+            state.checkInStatus = "Save failed. Confirm again.";
+        }
+    }
+}
+
+void handlePostCheckInMenuInput(AppState& state, ButtonId button) {
+    if (button == ButtonId::MODE) {
+        resetToHome(state);
+    } else if (button == ButtonId::NEXT) {
+        state.postCheckInMenuIndex = (state.postCheckInMenuIndex + 1) % 3;
+    } else if (button == ButtonId::BACK) {
+        if (state.postCheckInMenuIndex > 0) --state.postCheckInMenuIndex;
+        else resetToHome(state);
+    } else if (button == ButtonId::ACTION || button == ButtonId::START) {
+        if (state.postCheckInMenuIndex == 0) {
+            state.discoverIndex = 0;
+            pushScreen(state, ScreenId::DISCOVER);
+        } else if (state.postCheckInMenuIndex == 1) {
+            state.supportActivities = getRecommendedActivities(state.sharedContext.lastEmotion);
+            state.supportActivityIndex = 0;
+            state.supportShowingDetail = false;
+            pushScreen(state, ScreenId::SUPPORT);
+        } else {
+            pushScreen(state, ScreenId::COMPANION_CHAT);
+        }
     }
 }
 
@@ -448,6 +494,8 @@ const char* screenIdToString(ScreenId screen) {
     switch (screen) {
         case ScreenId::HOME:           return "HOME";
         case ScreenId::CHECK_IN:       return "CHECK_IN";
+        case ScreenId::EMOTION_SELECT: return "EMOTION_SELECT";
+        case ScreenId::POST_CHECKIN_MENU: return "POST_CHECKIN_MENU";
         case ScreenId::SUPPORT:        return "SUPPORT";
         case ScreenId::DISCOVER:       return "DISCOVER";
         case ScreenId::MUSIC_LIST:     return "MUSIC_LIST";

@@ -93,12 +93,12 @@ void drawCheckInScreen(DisplayController& display, AppState& state) {
 
     UICommon::drawCard(display, UICommon::kScreenPadding, 210,
                        display.getWidth() - 2 * UICommon::kScreenPadding, 35,
-                       state.checkInConfirmed ? "Support" : "Confirm",
-                       state.checkInConfirmed ? "Press S2/S3 for support" : "Press S2/S3 to save");
+                       state.checkInConfirmed ? "Next" : "Choose emotion",
+                       state.checkInConfirmed ? "Press S2/S3 for menu" : "Press S2/S3 to choose top 3");
     UICommon::drawButtonLegend(display,
         /*S1*/ "--",
-        /*S2*/ state.checkInConfirmed ? "SUPPORT" : "CONFIRM",
-        /*S3*/ state.checkInConfirmed ? "SUPPORT" : "CONFIRM",
+        /*S2*/ state.checkInConfirmed ? "MENU" : "CHOOSE",
+        /*S3*/ state.checkInConfirmed ? "MENU" : "CHOOSE",
         /*S4*/ "--", /*S5*/ "BACK");
 }
 

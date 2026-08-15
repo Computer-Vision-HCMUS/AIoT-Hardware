@@ -21,7 +21,9 @@ enum class ScreenId : uint8_t {
     COMPANION_CHAT = 6,
     INSIGHTS       = 7,
     MIC_TEST       = 8,  ///< Audio passthrough test (INMP441 → MAX98357)
-    WIFI_SETUP     = 9   ///< WiFi mode toggle (connected ↔ AP provisioning)
+    WIFI_SETUP     = 9,  ///< WiFi mode toggle (connected ↔ AP provisioning)
+    EMOTION_SELECT = 11, ///< Select one of the three strongest SER labels
+    POST_CHECKIN_MENU = 12 ///< Choose the next experience after confirmation
 };
 
 // ---------------------------------------------------------------------------
@@ -89,7 +91,7 @@ struct AppState {
     uint8_t historySize;
 
     // Per-screen selection cursors
-    uint8_t homeMenuIndex;    // 0=Check-In,1=Discover,2=Chat,3=Insights,4=TestMic
+    uint8_t homeMenuIndex;    // 0=Check-In,1=Discover,2=Recommendation,3=Chat...
     uint8_t discoverIndex;    // 0=Music, 1=Podcast
     uint8_t musicScrollIndex;
     uint8_t podcastScrollIndex;
@@ -111,6 +113,9 @@ struct AppState {
     std::string checkInDetectedEmotion;
     uint8_t checkInDetectedConfidence;
     std::array<uint8_t, 8> checkInProbabilities;
+    std::array<uint8_t, 3> checkInTopEmotionIndices;
+    uint8_t checkInEmotionChoiceIndex;
+    uint8_t postCheckInMenuIndex;
 
     // WiFi Setup sub-state
     uint8_t wifiSetupMenuIndex; // 0 = toggle mode, 1 = back
@@ -124,6 +129,8 @@ struct AppState {
 void handleButtonPress(AppState& state, ButtonId button);
 void handleHomeInput(AppState& state, ButtonId button);
 void handleCheckInInput(AppState& state, ButtonId button);
+void handleEmotionSelectInput(AppState& state, ButtonId button);
+void handlePostCheckInMenuInput(AppState& state, ButtonId button);
 void handleSupportInput(AppState& state, ButtonId button);
 void handleDiscoverInput(AppState& state, ButtonId button);
 void handleMusicListInput(AppState& state, ButtonId button);

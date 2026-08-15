@@ -73,16 +73,17 @@ void drawHomeScreen(DisplayController& display, const AppState& state) {
     static const char* kMenuItems[] = {
         "1. Check-In",
         "2. Discover",
-        "3. Companion Chat",
-        "4. Insights",
-        "5. Test Mic",
-        "6. Test Buttons",
-        "7. WiFi Setup"
+        "3. Recommendation",
+        "4. Companion Chat",
+        "5. Insights",
+        "6. Test Mic",
+        "7. Test Buttons",
+        "8. WiFi Setup"
     };
-    constexpr uint8_t kCount = 7;
+    constexpr uint8_t kCount = 8;
 
     const uint16_t startY = 52;
-    const uint16_t itemH  = 24;   // 6 x 24 = 144px, ends at y=196, footer at y=250
+    const uint16_t itemH  = 22;
     const uint16_t W      = display.getWidth();
 
     for (uint8_t i = 0; i < kCount; ++i) {
